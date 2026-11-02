@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verixa Test Library</title>
+<link rel="icon" type="image/png" href="/assets/verixa-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/loader.css">
+</head>
+<body>
+<div id="pre-load" data-first="500" data-repeat="500" role="status" aria-live="polite" aria-label="Loading your workspace">
+  <div class="loader-inner">
+    <div class="loader-logo"><img src="/assets/verixa-logo.png" alt=""></div>
+    <div class="box"></div><div class="box"></div><div class="box"></div><div class="box"></div><div class="box"></div>
+  </div>
+  <div class="loader-caption">Verixa<span class="loader-bar"><i></i></span><small>Loading your workspace</small></div>
+</div>
+<div id="root"></div>
+<script type="module" src="/src/dashboard/main.tsx"></script>
+</body>
+</html>

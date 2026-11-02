@@ -1,0 +1,19 @@
+# --- Deliverable 1: the app (from official_ui-main/requirements.txt, unchanged) ---
+fastapi>=0.115
+uvicorn[standard]>=0.30
+sqlalchemy>=2.0
+psycopg[binary]>=3.2
+httpx>=0.27
+pydantic-settings>=2.4
+itsdangerous>=2.2
+cryptography>=43
+pyotp>=2.9
+segno>=1.6
+
+# --- Deliverable 2: the Analysis Agent (from multi-agents/requirements.txt) ---
+google-adk
+litellm
+python-dotenv
+
+# psycopg-pool and the Test Agent's dependencies are not here: the Test & Execution Agent is out
+# of this scope, and the agent reads the database through SQLAlchemy's engine like the rest of the app.

@@ -1,0 +1,75 @@
+  /* ---------- Risk Analysis (Deliverable 2) ----------
+     The risk badges, stat tiles and sparkline-free table are the landing page mock-up's design
+     (src/landing/landing.css, .mock-badge / .mock-stat / .mock-table), rebuilt here against the
+     dashboard's own tokens and fed by real Analysis Agent output instead of hardcoded rows. */
+
+  .risk-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px;}
+  .risk-stat{padding:12px 14px;border-radius:12px;border:1px solid var(--hair);background:var(--soft);}
+  .risk-stat-label{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:hsl(var(--muted-foreground));}
+  .risk-stat-label svg{width:12px;height:12px;}
+  .risk-stat-value{margin-top:7px;font-size:23px;font-weight:700;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums;}
+  .risk-stat-sub{margin-top:4px;font-size:11.5px;color:#6b7280;}
+  .risk-stat.high{border-color:rgba(235,118,118,.32);}
+  .risk-stat.high .risk-stat-value{color:var(--bad);}
+  .risk-stat.med{border-color:rgba(227,164,88,.32);}
+  .risk-stat.med .risk-stat-value{color:var(--warn);}
+  .risk-stat.low{border-color:hsl(var(--success)/.32);}
+  .risk-stat.low .risk-stat-value{color:#5FD199;}
+
+  /* Risk label pill: the mock-up's .mock-badge, three levels */
+  .rbadge{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap;border:1px solid currentColor;}
+  .rbadge i{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0;}
+  .rbadge.low{color:#5FD199;background:hsl(150 60% 48%/.1);border-color:hsl(150 60% 48%/.3);}
+  .rbadge.med{color:var(--warn);background:rgba(201,122,31,.1);border-color:rgba(227,164,88,.3);}
+  .rbadge.high{color:var(--bad);background:rgba(196,61,61,.1);border-color:rgba(235,118,118,.3);}
+  .rbadge.none{color:#6b7280;background:var(--soft);border-color:var(--hair);}
+
+  /* Run state: the mock-up's .mock-status */
+  .rstate{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:7px;font-size:11.5px;font-weight:600;white-space:nowrap;}
+  .rstate svg{width:11px;height:11px;stroke-width:2.6;}
+  .rstate.scored{background:hsl(150 60% 48%/.14);color:#5FD199;}
+  .rstate.running,.rstate.queued{background:hsl(var(--accent)/.2);color:#B7AEF5;}
+  .rstate.needs_human_review{background:rgba(201,122,31,.14);color:var(--warn);}
+  .rstate.failed{background:rgba(196,61,61,.16);color:var(--bad);}
+  .rstate.running i,.rstate.queued i{width:7px;height:7px;border-radius:50%;background:currentColor;animation:rpulse 1.6s ease-in-out infinite;}
+  @keyframes rpulse{50%{opacity:.35;}}
+
+  /* The pull request cell: the mock-up's .mock-pr */
+  .risk-grid td{height:auto;padding:12px;}
+  .rpr{display:flex;align-items:center;gap:10px;min-width:0;}
+  .rpr-avatar{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;flex-shrink:0;font-size:9.5px;font-weight:700;color:#fff;}
+  .rpr-title{font-size:13px;font-weight:600;color:#f4f4f5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .rpr-title b{color:#6b7280;font-weight:600;margin-right:5px;}
+  .rpr-meta{margin-top:2px;font-size:11.5px;color:#6b7280;}
+  .rpr-meta code{font-family:'JetBrains Mono',monospace;font-size:10.5px;}
+  .risk-grid td.rscore{width:64px;text-align:center;font:600 13px 'JetBrains Mono',monospace;color:#c7c9d6;}
+  .risk-grid td.ract{width:110px;text-align:right;}
+  .risk-row{cursor:pointer;}
+  .risk-row.open td{background:hsl(var(--accent)/.07);}
+
+  /* The expanded detail: why the label came out this way, and what to test */
+  .rdetail{padding:0 !important;}
+  .rdetail-in{padding:4px 14px 20px 48px;display:grid;gap:16px;}
+  .rdetail h4{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:hsl(var(--muted-foreground));margin-bottom:7px;}
+  .rfactors{list-style:none;display:grid;gap:5px;}
+  .rfactors li{position:relative;padding-left:15px;font-size:13px;color:#c7c9d6;line-height:1.5;}
+  .rfactors li::before{content:"";position:absolute;left:0;top:7px;width:5px;height:5px;border-radius:50%;background:hsl(var(--accent));}
+  .rreason{font-size:13.5px;line-height:1.6;color:#d4d4d8;max-width:680px;}
+  .rareas{list-style:none;display:grid;gap:6px;}
+  .rareas li{display:flex;gap:9px;font-size:13px;color:#c7c9d6;line-height:1.5;}
+  .rareas li span{flex-shrink:0;width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font:600 10px 'JetBrains Mono',monospace;
+    background:hsl(var(--accent)/.18);color:#B7AEF5;}
+  .rmeta{display:flex;flex-wrap:wrap;gap:8px;}
+  .rerr{padding:10px 13px;border-radius:10px;font-size:13px;line-height:1.55;background:rgba(196,61,61,.1);border:1px solid rgba(235,118,118,.28);color:#f0b9b9;}
+  .rerr b{display:block;color:var(--bad);margin-bottom:3px;}
+
+  .risk-ask{display:flex;flex-wrap:wrap;align-items:center;gap:9px;}
+  .risk-ask input{width:110px;padding:8px 11px;border-radius:9px;border:1px solid var(--hair);background:var(--soft);color:#fff;
+    font:500 13.5px 'JetBrains Mono',monospace;}
+  .risk-ask input:focus{outline:2px solid hsl(var(--accent));outline-offset:1px;}
+  .risk-ask .hint{font-size:12.5px;color:#6b7280;}
+
+  @media (max-width:860px){
+    .rdetail-in{padding-left:14px;}
+    .risk-grid td.ract{width:auto;}
+  }

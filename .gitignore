@@ -1,0 +1,20 @@
+# Secrets: only the example file is shared
+.env
+.env.*
+!.env.example
+
+# Local environment and caches
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Screenshots and local artefacts
+screenshots/
+*.log
+.DS_Store
+Thumbs.db
+
+# Frontend dependencies and build output (npm install, npm run build)
+node_modules/
+frontend/dist/

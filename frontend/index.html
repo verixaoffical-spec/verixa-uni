@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>/* the saved theme is applied before the page draws, so it never flashes the wrong one */try{if(localStorage.getItem('verixa-theme')==='light')document.documentElement.dataset.theme='light'}catch(e){}</script>
+<title>Verixa — Your QA Teammate</title>
+<meta name="description" content="Verixa tests, investigates, and files tickets for every pull request — automatically. Ship with a QA teammate that never sleeps.">
+<link rel="icon" type="image/png" href="/assets/verixa-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/loader.css">
+</head>
+<body>
+<div id="pre-load" data-first="2400" data-repeat="900" role="status" aria-live="polite" aria-label="Loading Verixa">
+  <div class="loader-inner">
+    <div class="loader-logo"><img src="/assets/verixa-logo.png" alt=""></div>
+    <div class="box"></div><div class="box"></div><div class="box"></div><div class="box"></div><div class="box"></div>
+  </div>
+  <div class="loader-caption">Verixa<span class="loader-bar"><i></i></span><small></small></div>
+</div>
+<div id="root"></div>
+<script type="module" src="/src/landing/main.tsx"></script>
+</body>
+</html>
