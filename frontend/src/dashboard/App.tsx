@@ -9,6 +9,7 @@ import type { HookState, Link } from './connection';
 import { useLibrary } from './useLibrary';
 import { useToast } from './Toast';
 import { loader } from '../shared/loader';
+import { urlError } from '../shared/urlError';
 
 // Set when this page leaves on purpose, so the "unsaved changes" prompt stays quiet
 let leaving = false;
@@ -51,7 +52,6 @@ export default function App() {
   }, []);
 
   async function boot() {
-    const wanted = location.hash.slice(1);
     const error = new URLSearchParams(location.search).get('error');  // from a failed GitHub or Atlassian sign in
     if (error) history.replaceState(null, '', location.pathname + location.hash);
 
@@ -76,9 +76,10 @@ export default function App() {
     setGithub(s.github);
     setAtlassian(s.atlassian);
     await loader.hide();
-    if (error) toast(error.slice(0, 200));
+    if (error) toast(urlError(error));
 
-    // Security settings open whatever is linked. Read the address again: it may have changed while loading.
+    // Security settings open whatever is linked. The address is read now: it may have changed while loading.
+    const wanted = location.hash.slice(1);
     const open = (next: View) => show(location.hash === '#security' ? 'security' : next);
     const p = s.project;
     if (!s.github || !s.atlassian) {

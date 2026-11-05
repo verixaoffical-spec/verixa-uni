@@ -3,6 +3,7 @@ import Footer from '../landing/Footer';
 import Navbar from '../landing/Navbar';
 import Scene from './Scene';
 import TwoFactorStep from './TwoFactorStep';
+import { urlError } from '../shared/urlError';
 import { send, type Reply } from './api';
 import { destination, hasLetterAndNumber, normEmail, normName, problem, strength,
          type Field, type Mode, type Values } from './rules';
@@ -29,7 +30,7 @@ const order = (i: number) => ({ '--i': i }) as CSSProperties;  // staggers the e
 function bannerFromUrl(): Banner | null {
   const params = new URLSearchParams(location.search);
   const error = params.get('error');
-  if (error) return { message: error.slice(0, 200), kind: 'error' };
+  if (error) return { message: urlError(error), kind: 'error' };
   if (params.has('signed_out')) return { message: 'You have been signed out. See you soon.', kind: 'info' };
   if (params.has('expired')) return { message: 'Your session ended. Log in again to pick up where you left off.', kind: 'info' };
   if (params.has('reauth')) return { message: 'For your security, log in again to change your security settings.', kind: 'info' };

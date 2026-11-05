@@ -13,7 +13,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from backend import auth, twofactor
+from backend import api, auth, twofactor
 from backend.accounts import hash_password
 from backend.db import Base, Collection, Project, RecoveryCode, SessionLocal, SpecFile, User, engine, init_db
 from backend.main import app, mark_verified
@@ -50,7 +50,7 @@ class CrudTestCase(unittest.TestCase):
         Base.metadata.drop_all(engine)
         init_db()
         for t in (auth.login_by_email, auth.login_by_ip, auth.signup_by_ip,
-                  twofactor.code_by_user, twofactor.code_by_ip, twofactor.password_by_user):
+                  twofactor.code_by_user, twofactor.code_by_ip, twofactor.password_by_user, api.saves_by_user):
             t._fails.clear()
         self.client = self.new_client()
         # GitHub and Jira are faked. The ping calls the real code that runs when GitHub delivers it.

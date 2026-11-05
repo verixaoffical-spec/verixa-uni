@@ -44,6 +44,8 @@
   .rpr-meta code{font-family:'JetBrains Mono',monospace;font-size:10.5px;}
   .risk-grid td.rscore{width:64px;text-align:center;font:600 13px 'JetBrains Mono',monospace;color:#c7c9d6;}
   .risk-grid td.ract{width:110px;text-align:right;}
+  .risk-grid th.rscore{text-align:center;}
+  .risk-grid th.ract{text-align:right;}
   .risk-row{cursor:pointer;}
   .risk-row.open td{background:hsl(var(--accent)/.07);}
 

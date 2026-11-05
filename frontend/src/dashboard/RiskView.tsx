@@ -119,7 +119,7 @@ function Detail({ row }: { row: Assessment }) {
             {raised && <Chip on={false}>raised from {row.base_label} by a minimum label</Chip>}
             {row.model_used && <Chip on={false}>explained by {row.model_used}</Chip>}
             {row.attempts > 1 && <Chip on={false}>{row.attempts} manager attempts</Chip>}
-            {row.pr_url && (
+            {row.pr_url?.startsWith('https://github.com/') && (
               <a className="btn ghost sm" href={row.pr_url} target="_blank" rel="noopener noreferrer">
                 Open on GitHub
               </a>
@@ -295,7 +295,8 @@ export default function RiskView({ hidden, link, hook, onGoConnect }: Props) {
                 <tbody key={row.id}>
                   <tr className={'risk-row' + (open === row.id ? ' open' : '')}
                       onClick={() => setOpen(open === row.id ? null : row.id)}
-                      aria-expanded={open === row.id}>
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(open === row.id ? null : row.id); } }}
+                      tabIndex={0} aria-expanded={open === row.id}>
                     <td>
                       <div className="rpr">
                         <span className="rpr-avatar" style={{ background: `hsl(${hue(row.author)} 55% 45%)` }}>

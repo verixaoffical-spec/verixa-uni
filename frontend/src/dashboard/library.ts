@@ -151,7 +151,7 @@ export function addSpecFiles(lib: Library, files: PickedFile[], replacingName?: 
     const badName = invalidName(f.name);
     if (badName) why.push(badName);
     else if (!f.name.endsWith('.spec.ts')) why.push(/\.(jsx?|mjs|cjs)$/.test(f.name) ? 'JavaScript specs are not accepted. Use TypeScript (.spec.ts)' : 'Only .spec.ts files are accepted');
-    else if (f.name === '.spec.ts') why.push('File name needs a name before .spec.ts');
+    else if (!f.name.slice(0, -'.spec.ts'.length).replace(/[. ]/g, '')) why.push('File name needs a name before .spec.ts');
 
     if (!f.size) why.push('File is empty');
     else if (f.size > LIMITS.specBytes) why.push(`File is ${kb(f.size)}. The limit is ${kb(LIMITS.specBytes)}`);
@@ -192,6 +192,7 @@ export function addCollectionFile(lib: Library, files: PickedFile[]): Library {
   const badName = invalidName(f.name);
   if (badName) why.push(badName);
   else if (!f.name.endsWith('.json')) why.push('Only .json collection exports are accepted');
+  else if (!f.name.slice(0, -'.json'.length).replace(/[. ]/g, '')) why.push('File name needs a name before .json');
   if (!f.size) why.push('File is empty');
   else if (f.size > LIMITS.collectionBytes) why.push(`File is ${kb(f.size)}. The limit is ${kb(LIMITS.collectionBytes)}`);
 

@@ -1,0 +1,1 @@
+{"info":{"name":"Bad","schema":"https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},"item":[{"name":"read a local file","request":{"method":"GET","url":"file:///etc/passwd"}}]}

@@ -6,7 +6,9 @@ export type Values = Record<Field, string>;
 
 export const DASHBOARD = '/verixa_prototype.html';
 
-const EMAIL_RE = /^[^@\s]{1,64}@[^@\s]+\.[^@\s.]{2,}$/;
+const EMAIL_RE = /^[a-z0-9_%+'-]+(?:\.[a-z0-9_%+'-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2,}|xn--[a-z0-9-]+)$/;
+const NAME_RE = /^[\p{L}\p{M}][\p{L}\p{M} '’.\-]*$/u;
+const MIN_DISTINCT = 4;  // aaaaaaa1 and a1a1a1a1 pass every other rule
 const COMMON = new Set(['password', 'password1', 'password12', 'password123', '12345678', '123456789', '1234567890', 'qwerty123',
   'qwertyuiop', 'iloveyou1', 'letmein123', 'welcome1', 'welcome123', 'admin123', 'abc12345', 'passw0rd', '11111111', '00000000',
   'verixa123', 'monkey123', 'dragon123', 'football1', 'baseball1', 'sunshine1']);
@@ -22,12 +24,13 @@ export function problem(field: Field, values: Values, mode: Mode): string | null
   if (field === 'name') {
     if (!name) return 'Enter your name';
     if (name.length > 80) return 'Use 80 characters or fewer';
-    if (/[<>\p{C}]/u.test(name)) return 'Use letters, spaces and simple punctuation only';
+    if (!NAME_RE.test(name)) return 'Use letters, spaces and simple punctuation only';
+    if (name.length < 2) return 'Use at least 2 characters';
   }
 
   if (field === 'email') {
     if (!email) return 'Enter your email address';
-    if (email.length > 254 || !EMAIL_RE.test(email) || email.includes('..')) return 'Enter a valid email address, like name@company.com';
+    if (email.length > 254 || email.split('@')[0].length > 64 || !EMAIL_RE.test(email)) return 'Enter a valid email address, like name@company.com';
   }
 
   if (field === 'password') {
@@ -38,7 +41,7 @@ export function problem(field: Field, values: Values, mode: Mode): string | null
     if (!pw.trim()) return 'A password cannot be only spaces';
     if (!hasLetterAndNumber(pw)) return 'Use at least one letter and one number';
     const lower = pw.toLowerCase(), localPart = email.split('@')[0];
-    if (COMMON.has(lower)) return 'That password is too common. Pick something less guessable';
+    if (COMMON.has(lower) || new Set(lower).size < MIN_DISTINCT) return 'That password is too common. Pick something less guessable';
     if ((localPart.length >= 4 && lower.includes(localPart)) || (email && lower === email)) return 'Do not use your email address in the password';
     if (name.length >= 4 && lower.replace(/ /g, '').includes(name.toLowerCase().replace(/ /g, ''))) return 'Do not use your name in the password';
   }

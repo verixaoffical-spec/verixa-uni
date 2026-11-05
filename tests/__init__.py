@@ -7,4 +7,4 @@ os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL") or (
 os.environ["PUBLIC_URL"] = "http://testserver"
 for name in ("SECRET_KEY", "WEBHOOK_SECRET", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET",
              "ATLASSIAN_CLIENT_ID", "ATLASSIAN_CLIENT_SECRET"):
-    os.environ.setdefault(name, "test-" + name.lower())
+    os.environ.setdefault(name, "test-value-for-" + name.lower())

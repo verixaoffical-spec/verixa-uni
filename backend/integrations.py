@@ -30,11 +30,14 @@ def _call(method: str, url: str, **kwargs) -> httpx.Response:
 
 
 def _ok(response: httpx.Response, what: str, hint: str = "") -> dict | list:
-    if response.status_code == 401:
-        raise HTTPException(401, f"{what}: please sign in again")
+    if response.status_code == 401:  # the saved token is no good. Not a 401: the Verixa session itself is fine
+        raise HTTPException(409, f"{what}: the saved sign in no longer works. Link your account again")
     if response.status_code >= 400:
         raise HTTPException(502, f"{what} failed ({response.status_code}). {hint}".strip())
-    return response.json() if response.content else {}
+    try:
+        return response.json() if response.content else {}
+    except ValueError:
+        raise HTTPException(502, f"{what} failed. The answer could not be read")
 
 
 # ---------- GitHub ----------
@@ -146,7 +149,7 @@ def atlassian_access_token(db: Session, user: User) -> str:
     if time.time() < (user.atlassian_expires_at or 0):
         return unseal(user.atlassian_token)
     if not user.atlassian_refresh:
-        raise HTTPException(401, "Atlassian sign in expired: please sign in again")
+        raise HTTPException(409, "Atlassian sign in expired. Link your account again")
     tokens = _ok(_call("POST", ATLASSIAN_TOKEN_URL, json={
         "grant_type": "refresh_token",
         "client_id": settings.atlassian_client_id,

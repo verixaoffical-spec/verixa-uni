@@ -16,6 +16,19 @@ class Settings(BaseSettings):
     atlassian_client_id: str
     atlassian_client_secret: str
 
+    @field_validator("secret_key", "webhook_secret")
+    @classmethod
+    def long_enough(cls, value: str) -> str:
+        """An empty key would let anyone forge a session cookie or a webhook delivery, so the server refuses to start."""
+        if len(value.strip()) < 16:
+            raise ValueError("must be a long random string. See .env.example for how to generate one")
+        return value
+
+    @field_validator("public_url")
+    @classmethod
+    def no_trailing_slash(cls, url: str) -> str:
+        return url.rstrip("/")  # callback and webhook addresses are built by adding a path to it
+
     @field_validator("database_url")
     @classmethod
     def use_psycopg(cls, url: str) -> str:

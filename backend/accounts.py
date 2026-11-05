@@ -12,9 +12,12 @@ EMAIL_MAX = 254
 NAME_MAX = 80
 PASSWORD_MIN = 8
 PASSWORD_MAX = 128
+PASSWORD_MIN_DISTINCT = 4  # aaaaaaa1 and a1a1a1a1 pass every other rule
 
-# Deliberately loose: one @, a dot in the domain, no spaces. The real check is that the person can sign in.
-EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]+\.[^@\s.]{2,}$")
+# Plain ASCII addresses only, so no markup, control characters or look-alike letters can get in. Expects lowercase.
+# A top level domain is letters, or xn-- for an international one.
+EMAIL_RE = re.compile(r"^[a-z0-9_%+'-]+(?:\.[a-z0-9_%+'-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2,}|xn--[a-z0-9-]+)$")
+NAME_PUNCTUATION = " '’.-"
 COMMON_PASSWORDS = {
     "password", "password1", "password12", "password123", "12345678", "123456789", "1234567890", "qwerty123",
     "qwertyuiop", "iloveyou1", "letmein123", "welcome1", "welcome123", "admin123", "abc12345", "passw0rd",
@@ -36,7 +39,7 @@ def email_problem(email: str) -> str | None:
     """Expects a normalized email."""
     if not email:
         return "Enter your email address"
-    if len(email) > EMAIL_MAX or not EMAIL_RE.match(email) or ".." in email:
+    if len(email) > EMAIL_MAX or len(email.split("@")[0]) > 64 or not EMAIL_RE.fullmatch(email):
         return "Enter a valid email address, like name@company.com"
     return None
 
@@ -47,8 +50,11 @@ def name_problem(name: str) -> str | None:
         return "Enter your name"
     if len(name) > NAME_MAX:
         return f"Use {NAME_MAX} characters or fewer"
-    if any(unicodedata.category(c).startswith("C") for c in name) or re.search(r"[<>]", name):
+    is_letter = lambda c: unicodedata.category(c)[0] in "LM"
+    if not is_letter(name[0]) or not all(is_letter(c) or c in NAME_PUNCTUATION for c in name):
         return "Use letters, spaces and simple punctuation only"
+    if len(name) < 2:
+        return "Use at least 2 characters"
     return None
 
 
@@ -65,7 +71,7 @@ def password_problem(password: str, email: str = "", name: str = "") -> str | No
     if not re.search(r"[A-Za-z]", password) or not re.search(r"\d", password):
         return "Use at least one letter and one number"
     lowered = password.lower()
-    if lowered in COMMON_PASSWORDS:
+    if lowered in COMMON_PASSWORDS or len(set(lowered)) < PASSWORD_MIN_DISTINCT:
         return "That password is too common. Pick something less guessable"
     local = email.split("@")[0]
     if (len(local) >= 4 and local in lowered) or (email and lowered == email):
@@ -104,7 +110,7 @@ def safe_next(target: str | None, default: str) -> str:
         return default
     if not target.startswith("/") or target.startswith("//") or "\\" in target:
         return default
-    if any(ord(c) < 32 for c in target) or target.split("?")[0] in ("/login", "/signup"):
+    if any(ord(c) < 32 for c in target) or re.split(r"[?#]", target)[0] in ("/login", "/signup"):
         return default
     return target
 

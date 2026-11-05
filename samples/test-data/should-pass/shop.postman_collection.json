@@ -1,0 +1,8 @@
+{
+  "info": { "name": "Shop API", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+  "item": [
+    { "name": "List products", "request": { "method": "GET", "url": "https://example.com/products?q=two words" } },
+    { "name": "Variable address", "request": { "method": "POST", "url": "{{base url}}/orders" } },
+    { "name": "Local server", "request": { "method": "GET", "url": "http://localhost:3000/health" } }
+  ]
+}

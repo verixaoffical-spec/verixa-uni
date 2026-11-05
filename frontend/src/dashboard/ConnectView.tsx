@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { ApiError, api, type Account, type Session, type Targets } from './api';
+import { ApiError, api, linkAgain, type Account, type Session, type Targets } from './api';
 import { Chip, hookLabel, type HookState, type Link } from './connection';
 import { icons } from './icons';
 import { useToast } from './Toast';
@@ -50,6 +50,7 @@ function TimelineNode({ state, title, sub }: { state: StepState; title: string; 
 export default function ConnectView({ hidden, account, github, atlassian, link, hook, onConnected, onChangeRepo, onOpenLibrary }: Props) {
   const toast = useToast();
   const [targets, setTargets] = useState<Targets>({ repos: [], projects: [] });
+  const [targetsProblem, setTargetsProblem] = useState<{ message: string; relink: boolean } | null>(null);  // why the lists are empty
   const [repo, setRepo] = useState('');
   const [projectKey, setProjectKey] = useState('');
   const [lines, setLines] = useState<Line[]>([]);  // the terminal output of the last connect
@@ -64,9 +65,10 @@ export default function ConnectView({ hidden, account, github, atlassian, link, 
       setTargets(t);
       setRepo(link?.repo ?? t.repos[0] ?? '');
       setProjectKey(link?.jiraKey ?? t.projects[0]?.key ?? '');
-      if (!t.repos.length) toast('No repository found. You need admin access to a repository to add a webhook');
+      if (!t.repos.length) setTargetsProblem({ message: 'No repository found. You need admin access to a repository to add a webhook', relink: false });
+      else if (!t.projects.length) setTargetsProblem({ message: 'No Jira project found on this Atlassian site. Create one in Jira, then reload this page', relink: false });
     }).catch(err => {
-      if (!(err instanceof ApiError && err.status === 401)) toast(err.message);
+      if (!(err instanceof ApiError && err.status === 401)) setTargetsProblem({ message: err.message, relink: err instanceof ApiError && err.status === 409 });
     });
   }, [linked]);
 
@@ -141,6 +143,12 @@ export default function ConnectView({ hidden, account, github, atlassian, link, 
         </Step>
 
         <Step state={stateOf(2)} icon={icons.folder} title="Repository and project" hint="What Verixa watches, and where tickets go">
+          {targetsProblem && (
+            <div className="warnbox" role="alert" style={{ marginBottom: 12 }}>
+              {targetsProblem.message}
+              {targetsProblem.relink && <> <button type="button" className="btn sm ghost" onClick={linkAgain}>Link again</button></>}
+            </div>
+          )}
           <div className="formgrid act">
             <label className="field">Repository
               <select value={repo} onChange={e => setRepo(e.target.value)}>

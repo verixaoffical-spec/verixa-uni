@@ -13,7 +13,7 @@ facts the dashboard shows (title, author, url, head sha) are folded into this on
 Test Agent lands in Deliverable 3 and needs a real run object, split it then.
 """
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, inspect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -107,6 +107,13 @@ def dump(value) -> str | None:
     return None if value is None else json.dumps(value)
 
 
+def _iso(at: datetime | None) -> str | None:
+    """SQLite loses the timezone, and a browser reads a time without one as local. Every time here is UTC."""
+    if at is None:
+        return None
+    return (at if at.tzinfo else at.replace(tzinfo=timezone.utc)).isoformat()
+
+
 def to_json(row: RiskAssessment) -> dict:
     """The shape the dashboard reads. Keys are snake_case, like the rest of the API."""
     return {
@@ -134,6 +141,6 @@ def to_json(row: RiskAssessment) -> dict:
         "model_used": row.model_used,
         "attempts": row.attempts,
         "errors": _load(row.errors, []),
-        "created_at": row.created_at and row.created_at.isoformat(),
-        "updated_at": row.updated_at and row.updated_at.isoformat(),
+        "created_at": _iso(row.created_at),
+        "updated_at": _iso(row.updated_at),
     }

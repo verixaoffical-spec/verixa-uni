@@ -127,6 +127,12 @@ export const api = {
   newRecoveryCodes: (password: string, code: string) => request<{ recovery_codes: string[] }>('/auth/2fa/recovery-codes', { password, code }),
 };
 
+// Forgets saved GitHub and Atlassian sign ins that stopped working, then asks for them again.
+export async function linkAgain(): Promise<void> {
+  await fetch('/auth/relink', { method: 'POST', credentials: 'same-origin' });
+  location.href = '/auth/start';
+}
+
 export async function signOut(): Promise<boolean> {
   try {
     const res = await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });

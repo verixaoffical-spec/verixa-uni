@@ -9,7 +9,10 @@ export const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTION
 const TEST_RE = /(?<![\w.$])test(?:\.(only|skip|fixme))?\s*\(\s*(['"`])((?:\\.|(?!\2)[^\\\n])*)\2/g;
 const SECRET_RE = /ghp_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|xox[bp]-[A-Za-z0-9]+-[A-Za-z0-9-]+/;
 const SECRET_WARN = 'Possible API key or token found. Move secrets to environment variables';
-const BAD_NAME = /[\u0000-\u001f<>:"\/\\|?*]/;
+const FORBIDDEN_RE = /child_process|worker_threads|process\.(?:binding|dlopen)|(?<![\w$.])eval\s*\(|\bnew\s+Function\s*\(/;
+const BAD_URL_RE = /^\s*(javascript|vbscript|data|file|ftp)\s*:/i;
+const MAX_DEPTH = 50;
+const BAD_NAME = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁯﻿<>:"\/\\|?*]/;
 const RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 // The test script Verixa writes for an expected status code
 export const STATUS_RE = /^pm\.test\("Status code is (\d{3})", function \(\) \{\s*pm\.response\.to\.have\.status\(\1\);\s*\}\);$/;
@@ -68,17 +71,32 @@ export function invalidName(name: string): string {
   return '';
 }
 
-// Blanks out comments (keeping line breaks) and checks that brackets and quotes are closed.
+// Where the regular expression opening at start ends, or 0 when its line has no closing slash.
+function regexEnd(src: string, start: number): number {
+  let inClass = false;
+  for (let i = start + 1; i < src.length && src[i] !== '\n'; i++) {
+    const c = src[i];
+    if (c === '\\') i++;
+    else if (c === '[') inClass = true;
+    else if (c === ']') inClass = false;
+    else if (c === '/' && !inClass) return i + 1;
+  }
+  return 0;
+}
+
+// Blanks out comments (keeping line breaks) and checks that brackets and quotes are closed. A slash straight after
+// an opening bracket or an operator starts a regular expression, whose quotes and brackets do not count.
 export function scan(src: string): { clean: string; balanced: boolean } {
   const pairs: Record<string, string> = { ')': '(', ']': '[', '}': '{' };
   const stack: string[] = [];
-  let out = '', quote: string | null = null;
+  let out = '', quote: string | null = null, last = '';
+  let nextRegex = 0;  // after a failed try the rest of its line is skipped, or a line of slashes would hang the tab
   for (let i = 0; i < src.length; i++) {
     const c = src[i], n = src[i + 1];
     if (quote) {
       out += c;
       if (c === '\\') { out += n ?? ''; i++; }
-      else if (c === quote) quote = null;
+      else if (c === quote) { quote = null; last = c; }
       else if (c === '\n' && quote !== '`') return { clean: out + src.slice(i + 1), balanced: false };
       continue;
     }
@@ -95,7 +113,14 @@ export function scan(src: string): { clean: string; balanced: boolean } {
       i = stop - 1;
       continue;
     }
+    if (c === '/' && i >= nextRegex && (!last || '(,=:[!&|?{;'.includes(last))) {
+      const end = regexEnd(src, i);
+      if (end) { out += src.slice(i, end); i = end - 1; last = '/'; continue; }
+      const newline = src.indexOf('\n', i);
+      nextRegex = newline < 0 ? src.length : newline;
+    }
     if (c === '\\') { out += c + (n ?? ''); i++; continue; }
+    if (c.trim()) last = c;
     if (c === '"' || c === "'" || c === '`') quote = c;
     else if ('([{'.includes(c)) stack.push(c);
     else if (')]}'.includes(c) && stack.pop() !== pairs[c]) return { clean: out + src.slice(i), balanced: false };
@@ -107,10 +132,15 @@ export function scan(src: string): { clean: string; balanced: boolean } {
 export function analyseSpec(text: string): SpecAnalysis {
   const { clean, balanced } = scan(text);
   const errors: string[] = [], warnings: string[] = [];
-  const lineOf = (i: number) => text.slice(0, i).split('\n').length;
+  let line = 1, countedTo = 0;
+  const lineOf = (i: number) => {  // counted on from the last test: from the top is far too slow
+    for (; countedTo < i; countedTo++) if (text[countedTo] === '\n') line++;
+    return line;
+  };
 
   if (!/\bfrom\s+['"]@playwright\/test['"]/.test(clean)) errors.push("Missing import from '@playwright/test'");
-  if (/child_process/.test(clean)) errors.push('Uses child_process, which is not allowed in uploaded tests');
+  const forbidden = FORBIDDEN_RE.exec(clean);
+  if (forbidden) errors.push(`Uses ${forbidden[0].replace(/[\s(]+$/, '')}, which is not allowed in uploaded tests`);
   if (!balanced) errors.push('File looks incomplete. A bracket or quote is not closed');
 
   const tests: TestCase[] = [...clean.matchAll(TEST_RE)].map(m => ({
@@ -136,7 +166,7 @@ function urlOf(request: any): string {
   if (typeof request.url === 'string') return request.url;
   const url = request.url;
   if (!url) return '';
-  return url.raw || asList(url.host).join('.') + '/' + asList(url.path).join('/');
+  return String(url.raw || asList(url.host).join('.') + '/' + asList(url.path).join('/'));
 }
 
 // The test scripts of a request that actually contain code
@@ -167,8 +197,9 @@ export function analyseCollection(text: string): CollectionAnalysis {
 
   // Walks folders and requests in order, remembering where each one sits
   function walk(items: any[], path: string[], idx: number[]) {
+    if (idx.length > MAX_DEPTH) { bad.push('Folders are nested too deeply'); return; }
     items.forEach((item, i) => {
-      const name = item?.name || `Item ${i + 1}`;
+      const name = String(item?.name || `Item ${i + 1}`);
       if (item && Array.isArray(item.item)) {
         folderList.push({ label: [...path, name].join(' / '), idx: [...idx, i] });
         walk(item.item, [...path, name], [...idx, i]);
@@ -179,7 +210,10 @@ export function analyseCollection(text: string): CollectionAnalysis {
       const method = typeof r === 'string' ? 'GET' : String(r.method || 'GET').toUpperCase();
       const url = urlOf(r);
       if (!METHODS.includes(method)) bad.push(`"${name}" uses unsupported method ${method}`);
+      const scheme = BAD_URL_RE.exec(url);
       if (!url.replace(/\//g, '').trim()) bad.push(`"${name}" has no URL`);
+      else if (scheme) bad.push(`"${name}" uses a ${scheme[1].toLowerCase()} address, which is not allowed`);
+      else if (/\s/.test(url.replace(/\{\{[^{}]*\}\}/g, '').split('?')[0].trim())) bad.push(`"${name}" has an address that is not a URL`);
       const check = checkOf(item);
       requests.push({ folder: path.join(' / '), method, name, url, hasTests: check.kind !== 'none', check, path: [...idx, i] });
     });

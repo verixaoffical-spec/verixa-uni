@@ -91,7 +91,8 @@ Reply with only JSON, no markdown fences:
 
 Each test area is one specific, testable behaviour that this change adds or could break, written as a
 short test title, for example "login with rememberMe returns a 30 day token". Include at least one
-negative or edge case. Use only what the code changes show, do not invent features."""
+negative or edge case. Use only what the code changes show, do not invent features, and do not use
+anything you already know about this repository. Name the changed file or setting in the reasoning."""
     if st.get("feedback"):
         text += f"\n\nYour last answer was rejected. Fix these problems: {st['feedback']}"
     return text
@@ -134,7 +135,9 @@ class AnalysisAgent(BaseAgent):
 
 def build_analysis_agent() -> AnalysisAgent:
     names = chain("analysis")
-    writers = [Agent(name=f"analysis_writer_{i}", model=adk_model(n), instruction=_instruction,
+    # include_contents="none": everything is in the instruction, including any retry feedback. Given "Analyze owner/repo#1"
+    # and the other agents' messages too, models answered from memory of the repository and ignored the diff.
+    writers = [Agent(name=f"analysis_writer_{i}", model=adk_model(n), instruction=_instruction, include_contents="none",
                      description="Writes the explanation and test areas for a PR.")
                for i, n in enumerate(names)]
     return AnalysisAgent(name="analysis_agent", writers=writers, model_names=names, sub_agents=writers,

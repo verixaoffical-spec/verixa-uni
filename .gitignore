@@ -10,6 +10,7 @@ __pycache__/
 venv/
 
 # Screenshots and local artefacts
+*.db
 screenshots/
 *.log
 .DS_Store

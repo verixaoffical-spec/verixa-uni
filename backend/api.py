@@ -1,21 +1,26 @@
 """JSON API used by the dashboard: session, connect, and the Test Library."""
 import time
 
+from cryptography.fernet import InvalidToken
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from .accounts import Throttle
 from .agent_db import RiskAssessment
 from .auth import _check_origin, account_json, signed_in_user
 from .db import Collection, Project, SpecFile, User, get_db
 from .integrations import delete_webhook, ensure_webhook, list_jira_projects, list_repos, ping_webhook, webhook_url
 from .library import ApplyError, plan_apply
 from .security import unseal
+from .validators import MAX_SPECS
 
 router = APIRouter(prefix="/api")
 NOT_LINKED = "Connect GitHub and Atlassian first"
+MAX_INT = 2 ** 31 - 1  # the largest number the database columns hold
+saves_by_user = Throttle(limit=20, window=60)  # checking a full library takes seconds, so one account cannot repeat it
 
 
 def current_user(request: Request, db: Session = Depends(get_db)) -> User:
@@ -38,7 +43,7 @@ def remove_project(db: Session, user: User) -> None:
     if project.hook_id and user.github_token:
         try:
             delete_webhook(unseal(user.github_token), project.repo, project.hook_id)
-        except HTTPException:
+        except (HTTPException, InvalidToken):
             pass
     db.execute(delete(SpecFile).where(SpecFile.project_id == project.id))
     db.execute(delete(Collection).where(Collection.project_id == project.id))
@@ -84,8 +89,16 @@ def targets(user: User = Depends(current_user), db: Session = Depends(get_db)):
 
 
 class ConnectIn(BaseModel):
-    repo: str = Field(pattern=r"^[\w.\-]+/[\w.\-]+$", max_length=200)
+    repo: str = Field(pattern=r"^[A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+$", max_length=200)
     project_key: str = Field(min_length=1, max_length=50)
+
+    @field_validator("repo")
+    @classmethod
+    def not_a_path_trick(cls, repo: str) -> str:
+        """The name goes into GitHub API addresses, where ../.. would point at a different API call."""
+        if any(not part.strip(".") for part in repo.split("/")):
+            raise ValueError("That is not a repository name")
+        return repo
 
 
 def _wait_for_delivery(db: Session, project: Project, tries: int = 8) -> bool:
@@ -99,7 +112,8 @@ def _wait_for_delivery(db: Session, project: Project, tries: int = 8) -> bool:
 
 
 @router.post("/connect")
-def connect(body: ConnectIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def connect(body: ConnectIn, request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    _check_origin(request)
     if not user.github_token or not user.atlassian_token:
         raise HTTPException(403, NOT_LINKED)
     token = unseal(user.github_token)
@@ -152,27 +166,27 @@ def disconnect(request: Request, user: User = Depends(current_user), db: Session
 class SpecIn(BaseModel):
     name: str = Field(max_length=255)
     text: str = Field(max_length=600_000)
-    revision: int | None = Field(default=None, ge=1)  # the revision the dashboard last saw, or None for a new file
+    revision: int | None = Field(default=None, ge=1, le=MAX_INT)  # the revision the dashboard last saw, or None for a new file
 
 
 class SpecDeleteIn(BaseModel):
     name: str = Field(max_length=255)
-    revision: int | None = Field(default=None, ge=1)
+    revision: int | None = Field(default=None, ge=1, le=MAX_INT)
 
 
 class CollectionIn(BaseModel):
     name: str = Field(max_length=255)
     text: str = Field(max_length=5_500_000)
-    revision: int | None = Field(default=None, ge=1)
+    revision: int | None = Field(default=None, ge=1, le=MAX_INT)
 
 
 class RevisionIn(BaseModel):
-    revision: int | None = Field(default=None, ge=1)
+    revision: int | None = Field(default=None, ge=1, le=MAX_INT)
 
 
 class ApplyIn(BaseModel):
-    specs: list[SpecIn] = Field(default_factory=list, max_length=100)
-    delete_specs: list[SpecDeleteIn] = Field(default_factory=list, max_length=100)
+    specs: list[SpecIn] = Field(default_factory=list, max_length=MAX_SPECS)
+    delete_specs: list[SpecDeleteIn] = Field(default_factory=list, max_length=MAX_SPECS)
     collection: CollectionIn | None = None
     delete_collection: RevisionIn | None = None
 
@@ -223,19 +237,26 @@ def _apply(db: Session, user: User, body: ApplyIn) -> dict:
 
 
 @router.post("/library/apply")
-def apply_library(body: ApplyIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def apply_library(body: ApplyIn, request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    _check_origin(request)
+    if wait := saves_by_user.retry_after(str(user.id)):
+        raise HTTPException(429, f"Too many saves in a row. Try again in {wait} seconds", headers={"Retry-After": str(wait)})
+    saves_by_user.fail(str(user.id))
     return _apply(db, user, body)
 
 
 @router.delete("/library/specs/{name}", status_code=204)
-def delete_spec(name: str = Path(max_length=255), revision: int | None = Query(None, ge=1),
+def delete_spec(request: Request, name: str = Path(max_length=255), revision: int | None = Query(None, ge=1, le=MAX_INT),
                 user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Deleting a file that is already gone succeeds, so a retry is always safe."""
+    _check_origin(request)
     _apply(db, user, ApplyIn(delete_specs=[SpecDeleteIn(name=name, revision=revision)]))
     return Response(status_code=204)
 
 
 @router.delete("/library/collection", status_code=204)
-def delete_collection(revision: int | None = Query(None, ge=1), user: User = Depends(current_user), db: Session = Depends(get_db)):
+def delete_collection(request: Request, revision: int | None = Query(None, ge=1, le=MAX_INT),
+                      user: User = Depends(current_user), db: Session = Depends(get_db)):
+    _check_origin(request)
     _apply(db, user, ApplyIn(delete_collection=RevisionIn(revision=revision)))
     return Response(status_code=204)

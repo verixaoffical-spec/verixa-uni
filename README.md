@@ -7,10 +7,13 @@ A pull request opened on a connected repository is scored automatically: rules i
 risk label, the Analysis Agent writes the reasoning and the test areas, the Manager validates that
 output and retries with feedback, and the result lands on the Risk Analysis screen in the
 dashboard. Accounts, two-step verification, the GitHub and Jira connection and the Test Library are
-the Deliverable 1 app, unchanged.
+the Deliverable 1 app.
 
 FastAPI serves both the API and the built React frontend, so there is one server and one address.
 Data is stored in the shared Neon PostgreSQL database.
+
+**To run the project, follow [START.md](START.md).** For everything changed in the `verixa-uni-v2`
+branch, and why, see [section 12](#12-what-changed-in-verixa-uni-v2).
 
 **Contents**
 
@@ -25,6 +28,7 @@ Data is stored in the shared Neon PostgreSQL database.
 9. [API endpoints](#9-api-endpoints)
 10. [Testing](#10-testing)
 11. [Known limitations and outstanding work](#11-known-limitations-and-outstanding-work)
+12. [What changed in verixa-uni-v2](#12-what-changed-in-verixa-uni-v2)
 
 ---
 
@@ -67,7 +71,6 @@ analysis result to show. It is Farheen's task and it is implemented, so it is in
 |---|---|
 | **T-034** Yes/no risk questions + majority vote of 3 | Not implemented anywhere in multi-agents. The agent uses deterministic rules plus a single model call for the explanation only. Still TODO |
 | **T-036** PR and risk dashboard screen | Arisha's task, and no such screen exists in official_ui-main. The Risk Analysis screen in this folder is new integration glue, not T-036 delivered — see section 11 |
-| **T-037** Analysis eval set (20–30 cases) | Not present in either folder |
 | Test & Execution Agent (`test_agent/`, `manager_agent/test_phase.py`) | Still in its testing phase, and Deliverable 3 scope. `tests/test_analysis_integration.py` asserts it has not crept in |
 | Test run, evidence, Jira filing, drafted tests | Deliverables 3 to 5, not started |
 
@@ -79,21 +82,21 @@ analysis result to show. It is Farheen's task and it is implemented, so it is in
 mid/
   backend/                  FastAPI: the app plus the agent integration
     main.py                 app, pages, static frontend, the GitHub webhook
-    settings.py  db.py      settings and the five app tables         (Deliverable 1, unchanged)
-    auth.py  twofactor.py   sign in, OAuth, two-step verification    (Deliverable 1, unchanged)
-    profile.py  accounts.py account settings, password rules         (Deliverable 1, unchanged)
-    api.py                  session, connect, Test Library           (Deliverable 1, one edit *)
-    library.py  validators.py  save rules and file checks            (Deliverable 1, unchanged)
-    security.py  totp.py    encryption, webhook signature, TOTP      (Deliverable 1, unchanged)
-    integrations.py         GitHub and Atlassian calls               (Deliverable 1, unchanged)
+    settings.py  db.py      settings and the five app tables         (Deliverable 1)
+    auth.py  twofactor.py   sign in, OAuth, two-step verification    (Deliverable 1)
+    profile.py  accounts.py account settings, password rules         (Deliverable 1)
+    api.py                  session, connect, Test Library           (Deliverable 1 *)
+    library.py  validators.py  save rules and file checks            (Deliverable 1)
+    security.py  totp.py    encryption, webhook signature, TOTP      (Deliverable 1)
+    integrations.py         GitHub and Atlassian calls               (Deliverable 1)
     __init__.py             NEW: loads .env into the process, for the agent
     agent_db.py             NEW: the risk_assessments table
     analysis_service.py     NEW: webhook -> agent -> database
     analysis_api.py         NEW: /api/analysis for the dashboard
   agents/                   the Analysis Agent, reused from multi-agents
     risk_rules.py           T-031 / T-033, unchanged
-    analysis.py             T-031, the worker        (imports + a token parameter)
-    manager.py              T-035, unchanged except its imports
+    analysis.py             T-031, the worker        (imports, a token parameter, the prompt fix in section 12)
+    manager.py              T-035, plus a check that the explanation is about the changed code
     github_client.py        T-030 / T-032            (per-account token, no create_webhook)
     llm.py  events.py  models.py   shared plumbing, unchanged
     runner.py               drives ADK               (imports + a token parameter)
@@ -103,17 +106,23 @@ mid/
     src/dashboard/api.ts         + the analysis calls and types
     src/dashboard/Rail.tsx       Pull Requests is now a real screen, not Coming Soon
     src/dashboard/App.tsx        + the risk view and its #risk address
-    ... everything else unchanged
-  tests/                    190 tests
+    src/shared/urlError.ts       NEW: only real sign in messages are shown from the address bar
+    public/assets/theme-init.js  NEW: the saved theme, moved out of the page for the security policy
+  tests/                    263 tests
     test_risk_rules.py           NEW: the rule engine
     test_analysis_integration.py NEW: webhook -> agent -> database -> API
-    ... the five Deliverable 1 suites, unchanged
+    test_qa_security.py          NEW: every bug found while trying to break the app
+    test_risk_eval.py            NEW: T-037, the labelled eval set
+    ... the five Deliverable 1 suites
   scripts/                  database checks
     check_database.py       D1 on the real database   (extended: fingerprints whichever agent tables exist)
     live_check.py           NEW: D2 end to end on the real database with the real agent
+    seed_demo.py            NEW: demo accounts on a local SQLite file, to try every screen without OAuth keys
     show_data.py  show_2fa_data.py   read-only views, unchanged
   samples/                  a spec and a collection that pass every check
-  .env.example  requirements.txt  docker-compose.yml  README.md
+    test-data/              files that must pass, files that must fail, and a guide to testing by hand
+    test-data/shoplite/     Shoplite's tests for the Test Library, and sample pull requests for the agent
+  .env.example  requirements.txt  docker-compose.yml  README.md  START.md
 ```
 
 \* `api.py` has one addition: `remove_project` also deletes the project's risk assessments, so
@@ -156,8 +165,8 @@ straight from `os.environ`.
 | Setting | Needed for | What it is |
 |---|---|---|
 | `PUBLIC_URL` | OAuth, webhook | The public https address of this app (your ngrok domain) |
-| `SECRET_KEY` | always | Signs the session cookie, encrypts GitHub and Atlassian tokens. Never change it once in use |
-| `WEBHOOK_SECRET` | webhook | What GitHub signs every delivery with. Changing it breaks existing webhooks |
+| `SECRET_KEY` | always | Signs the session cookie, encrypts GitHub and Atlassian tokens. Never change it once in use. At least 16 characters, or the server refuses to start |
+| `WEBHOOK_SECRET` | always | What GitHub signs every delivery with. Changing it breaks existing webhooks. At least 16 characters, or the server refuses to start |
 | `DATABASE_URL` | always | Neon pooled connection string, pasted as Neon gives it. The same database the agents use |
 | `GITHUB_CLIENT_ID` / `_SECRET` | GitHub sign-in | From the GitHub OAuth App |
 | `ATLASSIAN_CLIENT_ID` / `_SECRET` | Jira | From the Atlassian OAuth 2.0 app |
@@ -248,8 +257,8 @@ it the label is final and not to question it. Models are tried in the order of
 instantly.
 
 **The Manager** (`agents/manager.py`, T-035) then validates that output in plain code: valid JSON,
-reasoning of a reasonable length that does not contradict the label, and 2 to 6 non-empty test
-areas. A rejected answer is sent back with the specific problems appended to the prompt. After
+reasoning of a reasonable length that does not contradict the label and mentions something from the
+changed code, and 2 to 6 non-empty test areas. A rejected answer is sent back with the specific problems appended to the prompt. After
 **three** attempts the pull request is escalated as `needs_human_review`, with the rule-based label
 still attached — the label never depends on the model succeeding.
 
@@ -361,7 +370,12 @@ To work offline instead of Neon: `docker compose up -d` and
 
 Everything from Deliverable 1 is unchanged and documented in `official_ui-main/README.md`
 section 6: `/auth/*`, `/auth/2fa/*`, `/api/account/*`, `/api/session`, `/api/targets`,
-`/api/connect`, `/api/disconnect`, `/api/library/*`. FastAPI's interactive docs are at `/docs`.
+`/api/connect`, `/api/disconnect`, `/api/library/*`. FastAPI's interactive docs are at `/docs` on a
+local `http://` address, and switched off when `PUBLIC_URL` is `https://`.
+
+`POST /auth/relink` is new: it forgets saved GitHub and Atlassian tokens that stopped working, so
+`/auth/start` asks for both again. A token GitHub or Atlassian refuses now answers **409** with a
+**Link again** action, never 401, because **401 only ever means the Verixa session is gone**.
 
 ### New in this folder
 
@@ -395,8 +409,11 @@ Build the frontend first (the end-to-end tests run the real app). Then name the 
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest tests.test_validators tests.test_library tests.test_accounts `
-    tests.test_crud tests.test_twofactor tests.test_risk_rules tests.test_analysis_integration
+    tests.test_crud tests.test_twofactor tests.test_risk_rules tests.test_analysis_integration `
+    tests.test_qa_security tests.test_risk_eval
 ```
+
+To test by hand with ready-made accounts and files, follow `samples/test-data/README.md`.
 
 **Always name the modules. Never run `unittest discover`.** The tests drop and recreate every
 table, so they use a temporary SQLite file by default and never touch `DATABASE_URL`. To run them
@@ -412,6 +429,8 @@ branch — never the production branch, where the agent tables live.
 | `tests/test_twofactor.py` | Two-step verification from setup to sign in |
 | **`tests/test_risk_rules.py`** | The rule engine: size, defect and sensitivity points, the minimum labels, new-module scoring, the factor trace, edge cases |
 | **`tests/test_analysis_integration.py`** | Webhook → agent → database → API, the signature and action guards, auth on every route, repeat deliveries, cleanup on disconnect and account delete, and that the Test Agent has not crept in |
+| **`tests/test_risk_eval.py`** | T-037: 30 labelled pull requests scored by the real rules. Run `python -m tests.test_risk_eval` to see the score |
+| **`tests/test_qa_security.py`** | Garbage input, stored script payloads, malformed requests, cross-site requests, path tricks, security headers, unreadable or revoked tokens, worst-case upload speed, and separation between accounts |
 
 `test_analysis_integration.py` fakes GitHub at the network boundary only — `fetch_pr` and the two
 defect-history lookups. Everything inside it is the real rule engine, the real Manager with its real
@@ -448,7 +467,8 @@ Frontend: `cd frontend; npm run typecheck` (no build) or `npm run build`.
 
 ### Implemented and tested
 
-* **190 tests pass**, including 24 rule-engine tests and 26 integration tests (SQLite).
+* **263 tests pass**, including 24 rule-engine tests, 26 integration tests and 70 security
+  regression tests (SQLite).
 * `npm run typecheck` and `npm run build` are clean.
 * The server boots, serves the landing page, login and dashboard, protects the new routes with
   401, rejects unsigned webhook deliveries with 401, and returns the analysis feed.
@@ -473,29 +493,25 @@ None of the above is **WORKING** in the sense docs/STATUS.md uses: that needs a 
 `scripts/verify/run.py` in docs/VERIFICATION.md, and no verification script has been run for these
 tasks yet.
 
+* **Real GitHub and Atlassian sign in, and a real delivery from github.com.** An account linked both
+  through the dashboard, connected `verixaoffical-spec/Shoplite`, and had its webhook created and
+  verified. GitHub's deliveries reached the app through ngrok and were answered 202. Shoplite pull
+  request #7 was scored High by the real agent and saved to Neon.
+
 ### Implemented but not fully tested
 
-* **GitHub and Atlassian OAuth sign-in.** `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`,
-  `ATLASSIAN_CLIENT_ID` and `ATLASSIAN_CLIENT_SECRET` are still placeholders — they were not in the
-  multi-agents `.env` and there is no `.env` in official_ui-main. Email and password sign-in,
-  two-step verification, the Test Library and the whole Risk Analysis flow work; "Continue with
-  GitHub", linking Atlassian and creating a webhook from the dashboard do not, until those four are
-  real. The code is covered by the test suite with the OAuth calls faked.
-* **A real delivery from github.com.** Deliveries are verified with correctly signed bodies through
-  the real app, but no webhook on a real repository has fired into this folder, because that needs
-  the OAuth app and a running ngrok tunnel.
-* **Two-step verification against a real authenticator app.** Covered end to end by
-  `tests/test_twofactor.py` and by `scripts/check_database.py` on real PostgreSQL, both using
-  generated TOTP codes.
+* **The sample pull requests.** The 8 samples in `samples/test-data/shoplite/PULL-REQUESTS.md` were run
+  through the real rules, Manager and model with GitHub faked, and all 8 got the expected label. They
+  have not all been opened as real pull requests.
+* **The Shoplite tests in the Test Library.** Both files pass Verixa's upload checks, but they have not
+  been run. Nothing in this app runs uploaded tests until Deliverable 3.
+* **The eval set against real pull requests.** See T-037 below.
 
-### Blocked by missing configuration
+### Needs the right keys
 
-* **Existing encrypted data cannot be read.** The shared database already holds one account with an
-  encrypted GitHub/Atlassian token and one with a two-step secret, encrypted under the *original*
-  official_ui-main `SECRET_KEY` and `TOTP_ENCRYPTION_KEY`. Those are not available, so `.env` here
-  carries newly generated keys. That account must link GitHub and Atlassian again and re-enrol
-  two-step verification, **unless** the original two keys are pasted into `.env`. New accounts are
-  unaffected, and no existing row is damaged — the ciphertext simply cannot be decrypted.
+* **Saved tokens can only be read with the keys that encrypted them.** Everyone sharing the database
+  must use the same `SECRET_KEY` and `TOTP_ENCRYPTION_KEY`. An account whose saved GitHub or Atlassian
+  sign in cannot be read, or is refused by GitHub, gets a **Link again** button. No row is damaged.
 
 ### Outstanding backlog work
 
@@ -504,8 +520,10 @@ tasks yet.
 * **T-036** the PR and risk dashboard screen is Arisha's task and stays TODO. The Risk Analysis
   screen here is the integration needed to show the agent's output at all; it is not a delivery of
   T-036 and should be reviewed against whatever Arisha designs.
-* **T-037** the analysis eval set (20–30 labelled cases) does not exist, so there is no recorded
-  accuracy for the risk labels. `docs/TESTING.md` requires it before D2 can be called accepted.
+* **T-037** a first eval set is in `tests/test_risk_eval.py`: 30 labelled cases, 26 correct (87%), with
+  the 4 misses listed as known gaps. The labels and changes were written for this set by someone who
+  had read the rules, so they are a draft: the team should review them and add real pull requests
+  before relying on the number. It measures the rule-based label, not the model's explanation.
 * Deliverables 3 to 5 — test selection and running, evidence, the Report Agent and Jira filing —
   are not started. The rail still shows Test Runs, Evidence, Jira Sync and Agent Logs as
   Coming Soon.
@@ -518,7 +536,16 @@ tasks yet.
 * The ADK runner prints `App name mismatch detected ... implies app name "agents"` on first use.
   Cosmetic: the app name is `verixa` while the package directory is `agents`.
 * Login and two-step rate limits are still counted in memory, so they reset when the server
-  restarts and are not shared between processes.
+  restarts and are not shared between processes. Run one server process until that changes.
+* Logging out ends every session of the account on every device, because a session lives in its
+  cookie and the shared `session_version` is what makes a stolen copy stop working.
+* Uploaded specs are only checked as text, and `eval` or `child_process` can be disguised. Nothing
+  in this app runs them. The Deliverable 3 test runner must run them in a sandbox.
+* `about_this_change` in `agents/manager.py` catches an explanation of some other change, but it only
+  needs one matching word, so it cannot prove that every statement in an explanation is correct.
+* Defect history counts commits with words like `fix` or `patch` in the title, and a whole folder
+  counts as one module, so busy folders such as `.github` can score high: `psf/requests#6500`
+  changes 2 lines of CI and is Medium because of 21 such commits.
 * Tables still come from `create_all` plus the small column-adding step in `db.py`. Alembic
   migrations are needed before the schema changes again — `risk_assessments` makes this more
   pressing, because dropping `projects` now needs the agent table dropped first.
@@ -527,3 +554,108 @@ tasks yet.
   against its original.
 * The analysis is done once per connected project. A repository connected by several accounts is
   read once per account, each with that account's own token.
+* The module name stops at the first folder after `src`, so `src/modules/auth/x.js` counts as the
+  module `modules`. Labels are still right, but its defect history covers all of `src/modules`.
+* A file of the maximum size takes about 1 to 4 seconds to check, so saves are limited to 20 a minute
+  per account. A determined signed-in user could still keep the server busy for a short time.
+
+---
+
+## 12. What changed in verixa-uni-v2
+
+The app was tested as an attacker would use it, on 5 and 6 November 2026. Each bug below was reproduced
+first, then fixed, and the tests were run again after each batch of fixes.
+
+**Results on the final code**
+
+| Check | Result |
+|---|---|
+| Automated tests | 263 of 263 pass. 190 existed before, and 73 are new |
+| Browser checks in real Chromium, against a local copy | 73 of 73 pass, with no alert, script error or blocked page resource |
+| `scripts/check_database.py` on Neon | Passes, and the agent tables are unchanged |
+| `scripts/live_check.py` on Neon, with the real agent | 20 of 20 pass |
+| Agent on 11 real public pull requests after the fix | The Manager approved all 11, and each label came from the rules |
+| 8 sample pull requests, with GitHub faked | 8 of 8 got the expected label |
+| `npm audit` | 0 vulnerabilities |
+
+The browser checks were a temporary script and are not in this repository.
+
+### Bugs fixed
+
+**Critical and high**
+
+| Bug | Fix | Files |
+|---|---|---|
+| A blank `SECRET_KEY` or `WEBHOOK_SECRET` was accepted, so anyone could forge a login or a delivery | The server refuses to start with a secret under 16 characters | `backend/settings.py` |
+| A token refused by GitHub or Atlassian answered 401, which sent the dashboard between log in and back in a loop, and showed a false "session ended" message | It now answers 409 with a **Link again** button that stays on screen. 401 only ever means the Verixa session is gone | `backend/integrations.py`, `backend/auth.py` (`/auth/relink`), `frontend/src/dashboard/ConnectView.tsx`, `api.ts` |
+| Anyone could crash the server without logging in, using a non-ASCII webhook signature or a lone surrogate in a request | These now answer 401 or 422. Validation errors no longer repeat what was sent, which could include a password | `backend/security.py`, `backend/main.py` |
+| `<script>` text was accepted as an email, and a `javascript:` link could be stored for a pull request | Both are refused. Only `https://github.com/` links are kept and shown | `backend/accounts.py`, `backend/analysis_service.py`, `frontend/src/auth/rules.ts`, `RiskView.tsx` |
+| No browser protection against injected scripts | Added a Content-Security-Policy, HSTS on https, and `no-store` on API answers. The inline theme script moved to its own file | `backend/main.py`, `frontend/index.html`, `frontend/public/assets/theme-init.js` |
+| Connect, Test Library saves and deletes had no check against requests from other sites | They now refuse them, like the other routes | `backend/api.py` |
+| `../..` was accepted as a repository name and sent to the GitHub API | Refused before reaching GitHub | `backend/api.py` |
+| A new push was scored from the previous push's diff | The cached diff is cleared for each new delivery | `backend/analysis_service.py` |
+| A crash during **Analyse now** left a row on "running" for ever, and the screen kept polling | The row is marked failed | `backend/analysis_service.py` |
+| **The model explained changes that did not exist.** A version bump in a linter config was described as redirect-loop logic, and the Manager approved it | The writer now sees only its instructions and the diff, and the Manager rejects an explanation that mentions nothing from the changed code | `agents/analysis.py`, `agents/manager.py` |
+| Malformed collections, signed webhooks of the wrong shape, huge numbers and unreadable saved tokens each caused a 500 | Each now gets a clear answer | `backend/validators.py`, `main.py`, `api.py`, `analysis_api.py`, `analysis_service.py` |
+| One upload could hold up the server: 50,000 tests in a file took 13 seconds to check | Line numbers are counted once through the file instead of from the top for each test, and saves are limited per account | `backend/validators.py`, `backend/api.py`, `frontend/src/dashboard/validation.ts` |
+
+**Medium and minor**
+
+| Bug | Fix | Files |
+|---|---|---|
+| Garbage names such as `12345` and `'; DROP TABLE users;--` were accepted | Names need letters, with simple punctuation only | `backend/accounts.py`, `frontend/src/auth/rules.ts` |
+| Passwords such as `aaaaaaa1` were accepted | At least 4 different characters | same |
+| `eval` and `new Function` were accepted in specs, while `page.$eval` must stay allowed | Refused, and `page.$eval` still works | `backend/validators.py`, `validation.ts` |
+| Valid specs with a regular expression such as `/Bob's/` were rejected as broken | Regular expressions are recognised | same |
+| `file:`, `javascript:` and `data:` addresses, and text that is not an address, were accepted in collections | Refused. `{{base url}}` and `localhost` still work | same |
+| File names could hide their real name with invisible characters, or have no name at all (`..spec.ts`) | Refused | same, and `frontend/src/dashboard/library.ts` |
+| Risk counts changed with the page size | Counted over every row | `backend/analysis_api.py` |
+| Pull requests from a previously connected repository still showed | Only the connected repository shows | `backend/analysis_api.py` |
+| A failed rerun kept showing the old explanation | It is cleared | `backend/analysis_service.py` |
+| `true` was accepted as a pull request number | Only whole numbers | `backend/analysis_api.py` |
+| A stolen copy of a cookie kept working after logout | Logout ends every session of the account, on every device | `backend/auth.py` |
+| The signup form could be used to test which emails have accounts, with no limit | Those attempts now count towards the limit | `backend/auth.py` |
+| `/login?error=any text` showed that text on the page, which could be used for phishing | Only real sign in messages are shown | `frontend/src/shared/urlError.ts`, `AuthPage.tsx`, `App.tsx` |
+| New rows showed "5h ago" on SQLite | Times now state that they are UTC | `backend/agent_db.py` |
+| A link to `#risk` could open the wrong screen | The address is read after loading | `frontend/src/dashboard/App.tsx` |
+| Empty repository and Jira lists gave no lasting reason | A message stays above the lists | `frontend/src/dashboard/ConnectView.tsx` |
+| Risk rows could not be opened from the keyboard | Tab and Enter work | `frontend/src/dashboard/RiskView.tsx` |
+| The **Analysed** and **Score** headers did not line up with their values | They now line up | `frontend/src/dashboard/risk.css` |
+| With no GitHub token, the agent sent an empty `Bearer` header, which GitHub refuses | The header is left out, so public repositories can be read | `agents/github_client.py` |
+| Other small gaps: `/docs` public on https, a request with no size could skip the size limit, a trailing slash in `PUBLIC_URL`, `agent_available` always true, a long GitHub name, a reply from GitHub that is not JSON | Each one is handled | `backend/main.py`, `settings.py`, `analysis_api.py`, `auth.py`, `integrations.py` |
+
+### Behaviour changes to know about
+
+* Logging out signs the account out on **all** devices.
+* Emails must use plain English letters and numbers, to block look-alike letters. An existing account with
+  an address like `josé@example.com` could no longer log in.
+* Names can no longer contain digits.
+* `SECRET_KEY` and `WEBHOOK_SECRET` must be at least 16 characters.
+* `/docs` only exists when `PUBLIC_URL` is not https.
+* Test Library saves are limited to 20 a minute per account, with at most 50 files in a request.
+
+### New files
+
+| File | What it is |
+|---|---|
+| `START.md` | Step by step instructions to run the project and show it to mentors |
+| `tests/test_qa_security.py` | 70 regression tests for the bugs above |
+| `tests/test_risk_eval.py` | T-037: 30 labelled pull requests, 87% correct, with the 4 misses recorded |
+| `scripts/seed_demo.py` | Demo accounts on a local SQLite file. It refuses any other database |
+| `samples/test-data/README.md` | Inputs and expected results for testing by hand |
+| `samples/test-data/should-pass/`, `should-fail/` | Upload files that must be accepted or refused |
+| `samples/test-data/shoplite/PULL-REQUESTS.md` | 8 sample pull requests for testing the agent on Shoplite |
+| `samples/test-data/shoplite/shop.spec.ts`, `shoplite.postman_collection.json` | Shoplite's tests, in the form the Test Library accepts |
+| `frontend/src/shared/urlError.ts`, `frontend/public/assets/theme-init.js` | Described in the tables above |
+
+### Other changed files
+
+* `frontend/package.json`, `package-lock.json`: Vite 5.4 to 6.4, a build tool only, to clear the `npm audit` warnings.
+* `tests/__init__.py`: longer test secrets, for the new 16 character rule.
+* `tests/test_crud.py`: resets the new save limit between tests.
+* `.gitignore`: also ignores `*.db`, for the local demo database.
+
+### Not in this repository
+
+`.env` holds the passwords and keys and is never committed. Each person keeps their own copy, using
+`.env.example` as the guide. Agent keys and app credentials are all in that one file.

@@ -12,7 +12,14 @@ IMPORT_RE = re.compile(r"""\bfrom\s+['"]@playwright/test['"]""")
 SECRET_RE = re.compile(r"ghp_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|xox[bp]-[A-Za-z0-9]+-[A-Za-z0-9-]+")
 SECRET_WARNING = "Possible API key or token found. Move secrets to environment variables"
 
-_BAD_NAME_CHARS = re.compile(r'[\x00-\x1f<>:"/\\|?*]')
+# Run code from text, so an uploaded test could do anything on the machine running it. A check on the text cannot catch
+# every disguise, so the test runner still has to run uploads in a sandbox.
+FORBIDDEN_RE = re.compile(r"child_process|worker_threads|process\.(?:binding|dlopen)|(?<![\w$.])eval\s*\(|\bnew\s+Function\s*\(")
+# These read local files or run code instead of calling an API.
+BAD_URL_RE = re.compile(r"^\s*(javascript|vbscript|data|file|ftp)\s*:", re.I)
+
+# Includes control and invisible characters, which can make a file look like it has a different name.
+_BAD_NAME_CHARS = re.compile('[\x00-\x1f\x7f-\x9f​-‏‪-‮⁠-⁯﻿<>:"/\\\\|?*]')
 _RESERVED_NAMES = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
 
 
@@ -39,10 +46,30 @@ def _byte_size(text: str) -> int | None:
         return None
 
 
+def _regex_end(src: str, start: int) -> int:
+    """Where the regular expression opening at start ends, or 0 when its line has no closing slash."""
+    i, in_class = start + 1, False
+    while i < len(src) and src[i] != "\n":
+        c = src[i]
+        if c == "\\":
+            i += 2
+            continue
+        if c == "[":
+            in_class = True
+        elif c == "]":
+            in_class = False
+        elif c == "/" and not in_class:
+            return i + 1
+        i += 1
+    return 0
+
+
 def scan(src: str) -> tuple[str, bool]:
-    """Blanks out comments (keeping line breaks) and checks that brackets and quotes are closed."""
+    """Blanks out comments (keeping line breaks) and checks that brackets and quotes are closed. A slash straight after
+    an opening bracket or an operator starts a regular expression, whose quotes and brackets do not count."""
     pairs = {")": "(", "]": "[", "}": "{"}
-    stack, out, quote, i, size = [], [], None, 0, len(src)
+    stack, out, quote, i, size, last = [], [], None, 0, len(src), ""
+    next_regex = 0  # after a failed try the rest of its line is skipped, or a line of slashes would take hours to check
     while i < size:
         c = src[i]
         nxt = src[i + 1] if i + 1 < size else ""
@@ -53,7 +80,7 @@ def scan(src: str) -> tuple[str, bool]:
                 i += 2
                 continue
             if c == quote:
-                quote = None
+                quote, last = None, c
             elif c == "\n" and quote != "`":
                 return "".join(out) + src[i + 1:], False
             i += 1
@@ -71,10 +98,19 @@ def scan(src: str) -> tuple[str, bool]:
                 return "".join(out), False
             i = stop
             continue
+        if c == "/" and i >= next_regex and (not last or last in "(,=:[!&|?{;"):
+            end = _regex_end(src, i)
+            if end:
+                out.append(src[i:end])
+                i, last = end, "/"
+                continue
+            next_regex = src.find("\n", i) % (size + 1)
         if c == "\\":
             out.append(c + nxt)
             i += 2
             continue
+        if not c.isspace():
+            last = c
         if c in "\"'`":
             quote = c
         elif c in "([{":
@@ -91,14 +127,15 @@ def analyse_spec(text: str) -> dict:
     errors, warnings = [], []
     if not IMPORT_RE.search(clean):
         errors.append("Missing import from '@playwright/test'")
-    if "child_process" in clean:
-        errors.append("Uses child_process, which is not allowed in uploaded tests")
+    if forbidden := FORBIDDEN_RE.search(clean):
+        errors.append(f"Uses {forbidden.group().rstrip(' (')}, which is not allowed in uploaded tests")
     if not balanced:
         errors.append("File looks incomplete. A bracket or quote is not closed")
-    tests = [
-        {"title": m.group(3), "line": text.count("\n", 0, m.start()) + 1, "mode": m.group(1) or ""}
-        for m in TEST_RE.finditer(clean)
-    ]
+    tests, line, counted_to = [], 1, 0
+    for m in TEST_RE.finditer(clean):
+        line += text.count("\n", counted_to, m.start())  # counted on from the last test: from the top is far too slow
+        counted_to = m.start()
+        tests.append({"title": m.group(3), "line": line, "mode": m.group(1) or ""})
     if not tests:
         errors.append('No tests found. Add at least one test("title", async ({ page }) => { ... })')
     if any(t["mode"] == "only" for t in tests):
@@ -117,7 +154,7 @@ def validate_spec(name: str, text: str) -> dict:
         errors.append(reason)
     elif not name.endswith(".spec.ts"):
         errors.append("Only .spec.ts files are accepted")
-    elif name == ".spec.ts":
+    elif not name.removesuffix(".spec.ts").strip(". "):
         errors.append("File name needs a name before .spec.ts")
     size = _byte_size(text)
     if size is None:
@@ -180,7 +217,7 @@ def analyse_collection(text: str) -> dict:
             return
         for index, raw in enumerate(items):
             item = raw if isinstance(raw, dict) else {}
-            name = item.get("name") or f"Item {index + 1}"
+            name = str(item.get("name") or f"Item {index + 1}")
             if isinstance(item.get("item"), list):
                 folders += 1
                 walk(item["item"], path + [name], depth + 1)
@@ -198,9 +235,13 @@ def analyse_collection(text: str) -> dict:
                 bad.append(f'"{name}" uses unsupported method {method}')
             if not url.replace("/", "").strip():
                 bad.append(f'"{name}" has no URL')
+            elif scheme := BAD_URL_RE.match(url):
+                bad.append(f'"{name}" uses a {scheme.group(1).lower()} address, which is not allowed')
+            elif re.search(r"\s", re.sub(r"\{\{[^{}]*\}\}", "", url).split("?")[0].strip()):  # {{base url}} is a variable
+                bad.append(f'"{name}" has an address that is not a URL')
             has_tests = any(
-                isinstance(e, dict) and e.get("listen") == "test"
-                and "".join(map(str, _aslist((e.get("script") or {}).get("exec")))).strip()
+                isinstance(e, dict) and e.get("listen") == "test" and isinstance(e.get("script"), dict)
+                and "".join(map(str, _aslist(e["script"].get("exec")))).strip()
                 for e in _aslist(item.get("event"))
             )
             requests.append({"folder": " / ".join(path), "method": method, "name": name, "url": url, "has_tests": has_tests})
@@ -226,6 +267,8 @@ def validate_collection(name: str, text: str) -> dict:
         errors.append(reason)
     elif not name.endswith(".json"):
         errors.append("Only .json collection exports are accepted")
+    elif not name.removesuffix(".json").strip(". "):
+        errors.append("File name needs a name before .json")
     size = _byte_size(text)
     if size is None:
         errors.append("File contains invalid characters")

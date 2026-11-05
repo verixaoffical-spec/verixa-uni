@@ -39,4 +39,4 @@ def valid_signature(body: bytes, header: str | None) -> bool:
     if not header:
         return False
     expected = "sha256=" + hmac.new(settings.webhook_secret.encode(), body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, header)
+    return hmac.compare_digest(expected.encode(), header.encode())  # as bytes: comparing text fails on non-ASCII input

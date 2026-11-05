@@ -20,11 +20,11 @@ API = "https://api.github.com"
 
 
 def _headers(token: str | None = None) -> dict:
-    return {
-        "Authorization": f"Bearer {token or os.getenv('GITHUB_TOKEN', '')}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    token = token or os.getenv("GITHUB_TOKEN")
+    if token:  # without one GitHub still answers for public repositories, but refuses an empty Bearer
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
 
 
 def verify_signature(body: bytes, signature: str | None) -> bool:

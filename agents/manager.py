@@ -14,6 +14,21 @@ from .llm import parse_json
 
 MAX_ATTEMPTS = 3
 LABELS = ["Low", "Medium", "High"]
+# Words that say nothing about which change is being described, so they do not count as a match.
+GENERIC_WORDS = {"this", "that", "with", "from", "have", "been", "will", "they", "their", "only", "file", "files", "code",
+                 "line", "lines", "change", "changes", "changed", "test", "tests", "check", "checks", "module", "risk",
+                 "label", "score", "small", "large", "size", "http", "https", "github", "null", "true", "false", "none",
+                 "return", "value", "values", "repo", "repository", "pull", "request", "requests", "update", "updates"}
+
+
+def _words(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z][a-z0-9_]{3,}", text.lower())} - GENERIC_WORDS
+
+
+def about_this_change(answer: str, diff: str) -> bool:
+    """A model can answer from what it knows about a famous repository instead of reading the diff, so the answer must
+    mention something from the changed code. An empty diff has nothing to compare."""
+    return not _words(diff) or bool(_words(answer) & _words(diff))
 
 
 def validate(pr_id: str) -> tuple[dict | None, list[str]]:
@@ -33,6 +48,8 @@ def validate(pr_id: str) -> tuple[dict | None, list[str]]:
         errs.append(f"reasoning contradicts the risk label, which is {label}.")
     if not isinstance(areas, list) or not 2 <= len(areas) <= 6 or not all(isinstance(a, str) and a.strip() for a in areas):
         errs.append("suggested_test_areas must be a list of 2-6 non-empty strings.")
+    if not errs and not about_this_change(reasoning, st["facts"].get("diff_summary", "")):
+        errs.append("reasoning does not mention the changed code. Name the changed files or what changed in them.")
     return (None if errs else data), errs
 
 

@@ -5,6 +5,7 @@ Every route needs an account, through the same `current_user` dependency the res
 uses, so the session cookie and the 401 contract ("the session is gone") are unchanged.
 """
 import logging
+from importlib.util import find_spec
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from pydantic import BaseModel, Field
@@ -13,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from .agent_db import RiskAssessment, to_json
 from .analysis_service import AgentUnavailable, analyse_now
-from .api import current_user, project_of
+from .api import MAX_INT, current_user, project_of
 from .auth import _check_origin
 from .db import User, get_db
 
@@ -33,19 +34,18 @@ def pull_requests(limit: int = Query(50, ge=1, le=200),
     """
     project = project_of(db, user)
     if not project:
-        return {"project": None, "items": [], "counts": {}, "agent_available": True}
+        return {"project": None, "items": [], "counts": {}, "agent_available": find_spec("google.adk") is not None}
 
-    rows = db.scalars(
-        select(RiskAssessment)
-        .where(RiskAssessment.project_id == project.id)
-        .order_by(RiskAssessment.created_at.desc(), RiskAssessment.id.desc())
-        .limit(limit)
-    ).all()
+    # Only the repository connected now: rows from before switching repository are kept, but they are not this screen's.
+    mine = (RiskAssessment.project_id == project.id, RiskAssessment.repo == project.repo)
+    newest_first = (RiskAssessment.created_at.desc(), RiskAssessment.id.desc())
+    rows = db.scalars(select(RiskAssessment).where(*mine).order_by(*newest_first).limit(limit)).all()
 
     # Counts are over the latest assessment per pull request, so one PR pushed to five times is
-    # counted once, at its current risk.
-    latest: dict[int, RiskAssessment] = {}
-    for row in rows:
+    # counted once, at its current risk. They cover every row, whatever the page size.
+    latest = {}
+    for row in db.execute(select(RiskAssessment.pr_number, RiskAssessment.risk_label, RiskAssessment.state)
+                          .where(*mine).order_by(*newest_first)):
         latest.setdefault(row.pr_number, row)
     counts = {label: 0 for label in LABELS}
     for row in latest.values():
@@ -63,12 +63,12 @@ def pull_requests(limit: int = Query(50, ge=1, le=200),
             "needs_review": sum(1 for r in latest.values() if r.state == "needs_human_review"),
             "failed": sum(1 for r in latest.values() if r.state == "failed"),
         },
-        "agent_available": True,
+        "agent_available": find_spec("google.adk") is not None,
     }
 
 
 @router.get("/pull-requests/{assessment_id}")
-def one_assessment(assessment_id: int = Path(ge=1), user: User = Depends(current_user),
+def one_assessment(assessment_id: int = Path(ge=1, le=MAX_INT), user: User = Depends(current_user),
                    db: Session = Depends(get_db)):
     """One assessment in full. 404 for a row that belongs to somebody else, never 403, so the id
     space of another account cannot be probed."""
@@ -80,7 +80,7 @@ def one_assessment(assessment_id: int = Path(ge=1), user: User = Depends(current
 
 
 class AnalyseIn(BaseModel):
-    pr_number: int = Field(ge=1, le=10_000_000)
+    pr_number: int = Field(strict=True, ge=1, le=10_000_000)  # strict: true and "4" are not pull request numbers
 
 
 @router.post("/analyse")

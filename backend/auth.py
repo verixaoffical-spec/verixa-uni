@@ -132,6 +132,7 @@ def signup(body: SignupIn, request: Request, db: Session = Depends(get_db)):
     if wait := signup_by_ip.retry_after(ip):
         return _too_many(wait)
     if db.scalar(select(User.id).where(User.email == email)):
+        signup_by_ip.fail(ip)  # counted too, so nobody can test a long list of emails to see who has an account
         raise _field_error("email", "An account with this email already exists. Log in instead", 409)
     user = User(email=email, name=name, password_hash=hash_password(body.password))
     db.add(user)
@@ -170,8 +171,12 @@ def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/logout", status_code=204)
-def logout(request: Request):
+def logout(request: Request, db: Session = Depends(get_db)):
+    """Ends every session of the account. A session lives in its cookie, so this is what makes a stolen copy useless."""
     _check_origin(request)
+    if user := signed_in_user(request, db):
+        user.session_version += 1
+        db.commit()
     request.session.clear()
     return Response(status_code=204)
 
@@ -212,6 +217,18 @@ def start(request: Request, db: Session = Depends(get_db)):
     return RedirectResponse(APP)
 
 
+@router.post("/relink", status_code=204)
+def relink(request: Request, db: Session = Depends(get_db)):
+    """Forgets saved GitHub and Atlassian tokens that stopped working, so /auth/start asks for both again."""
+    _check_origin(request)
+    user = signed_in_user(request, db)
+    if not user:
+        raise HTTPException(401, "Sign in first")
+    user.github_token = user.atlassian_token = user.atlassian_refresh = user.atlassian_expires_at = None
+    db.commit()
+    return Response(status_code=204)
+
+
 @router.get("/github/callback")
 def github_callback(request: Request, code: str | None = None, state: str | None = None,
                     error: str | None = None, db: Session = Depends(get_db)):
@@ -230,7 +247,7 @@ def github_callback(request: Request, code: str | None = None, state: str | None
     user = current or owner or User(github_id=me["id"], name=normalize_name(me.get("name") or me["login"])[:80])
     user.github_id = me["id"]
     user.github_login = me["login"]
-    user.github_name = me.get("name")
+    user.github_name = (me.get("name") or "")[:200] or None  # GitHub allows longer names than the column holds
     user.github_token = seal(token)
     db.add(user)
     db.commit()

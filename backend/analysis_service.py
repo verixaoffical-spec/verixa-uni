@@ -17,6 +17,7 @@ Flow
 """
 import asyncio
 import logging
+import re
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -30,6 +31,8 @@ log = logging.getLogger(__name__)
 
 # Only these actions mean "the code changed, score it again". Everything else is ignored.
 HANDLED_ACTIONS = {"opened", "synchronize", "reopened"}
+GITHUB_URL = "https://github.com/"
+SHA_RE = re.compile(r"[0-9a-fA-F]{7,64}")
 
 # `opened` and `synchronize` can arrive together. One analysis per pull request at a time.
 _LOCKS: dict[str, asyncio.Lock] = {}
@@ -49,22 +52,32 @@ def _load_runner():
     return run_manager
 
 
+def _dict(value) -> dict:
+    return value if isinstance(value, dict) else {}
+
+
+def _text(value, limit: int) -> str | None:
+    """A cleaned string from a payload, or None. PostgreSQL refuses a NUL character in text."""
+    return (value.replace("\x00", "").strip()[:limit] or None) if isinstance(value, str) else None
+
+
 def pr_facts(payload: dict) -> dict | None:
     """Pulls the fields the agent and the dashboard need out of a `pull_request` event.
     Returns None when the payload is not a usable pull request event."""
-    pr = payload.get("pull_request") or {}
-    repo = ((payload.get("repository") or {}).get("full_name") or "").strip()
+    pr = _dict(payload.get("pull_request"))
+    repo = _text(_dict(payload.get("repository")).get("full_name"), 200)
     number = payload.get("number") or pr.get("number")
-    head = ((pr.get("head") or {}).get("sha") or "").strip()
-    if not repo or not isinstance(number, int) or not head:
+    head = _text(_dict(pr.get("head")).get("sha"), 64)
+    if not repo or type(number) is not int or number < 1 or not head or not SHA_RE.fullmatch(head):
         return None
+    url = _text(pr.get("html_url"), 500)
     return {
         "repo": repo,
         "pr_number": number,
-        "head_sha": head[:64],
-        "title": (pr.get("title") or "")[:500] or None,
-        "pr_url": (pr.get("html_url") or "")[:500] or None,
-        "author": ((pr.get("user") or {}).get("login") or "")[:100] or None,
+        "head_sha": head,
+        "title": _text(pr.get("title"), 500),
+        "pr_url": url if url and url.startswith(GITHUB_URL) else None,  # the screen makes this a link, so never javascript:
+        "author": _text(_dict(pr.get("user")).get("login"), 100),
     }
 
 
@@ -129,10 +142,10 @@ def store_result(db: Session, row_id: int, result: dict, facts: dict | None) -> 
         row.risk_label = result.get("risk_label")
         row.risk_factors = dump(result.get("risk_factors") or [])
 
-    if analysis:
-        row.reasoning = analysis.get("reasoning")
-        row.test_areas = dump(analysis.get("suggested_test_areas") or [])
-        row.model_used = (analysis.get("model") or "")[:120] or None
+    # With no accepted answer these are emptied, so a rerun never shows the explanation of an earlier run.
+    row.reasoning = analysis.get("reasoning")
+    row.test_areas = dump(analysis.get("suggested_test_areas") or [])
+    row.model_used = (analysis.get("model") or "")[:120] or None
 
     row.attempts = result.get("attempts") or 0
     errors = result.get("errors") or []
@@ -161,6 +174,8 @@ async def _score_one(row_id: int, pr_id: str, token: str | None) -> None:
         return
 
     try:
+        from agents.analysis import _CACHE
+        _CACHE.pop(pr_id, None)  # the agent reuses this between its retries, but a new push has a new diff
         result = await run_manager(pr_id, token)
     except Exception as exc:
         log.exception("Analysis Agent crashed on %s", pr_id)
@@ -263,8 +278,12 @@ async def analyse_now(project: Project, pr_number: int, token: str | None) -> in
             db.refresh(row)
             row_id = row.id
 
-        result = await run_manager(pr_id, token)
-        agent_facts = (ANALYSES.get(pr_id) or {}).get("facts") or scored
-        with SessionLocal() as db:
-            store_result(db, row_id, result, agent_facts)
+        try:
+            result = await run_manager(pr_id, token)
+            agent_facts = (ANALYSES.get(pr_id) or {}).get("facts") or scored
+            with SessionLocal() as db:
+                store_result(db, row_id, result, agent_facts)
+        except Exception as exc:  # otherwise the row says "running" forever and the screen never stops polling
+            mark_failed(row_id, f"The analysis could not finish: {type(exc).__name__}")
+            raise
     return row_id
