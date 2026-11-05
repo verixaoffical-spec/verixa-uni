@@ -140,10 +140,122 @@ copy .env.example .env     # then fill it in, see section 4
 The server **refuses to start until the frontend is built**. Run `npm run build` again after
 changing anything in `frontend/`.
 
-One-time setup outside the code — the ngrok domain, the GitHub OAuth App and the Atlassian OAuth
-2.0 app — is unchanged from Deliverable 1. The instructions are in
-`official_ui-main/README.md` section 1, and the callback URLs are still
-`PUBLIC_URL/auth/github/callback` and `PUBLIC_URL/auth/atlassian/callback`.
+### One-time setup outside the code
+
+Three things to register once: the tunnel, a GitHub **OAuth App**, and an Atlassian OAuth 2.0 app.
+Everything below assumes the project's static ngrok domain:
+
+```
+https://cognition-skimmer-launder.ngrok-free.dev
+```
+
+Substitute your own if it differs. Every URL in this section is built from `PUBLIC_URL`, so it has
+to match character for character.
+
+#### a. ngrok
+
+Free ngrok accounts include **one permanent static domain** (dashboard.ngrok.com → Domains). Use
+it: with an ephemeral tunnel the URL changes on every restart, which breaks the OAuth callbacks
+*and* leaves every webhook already created on GitHub pointing at a dead address.
+
+```powershell
+ngrok config add-authtoken <token>          # once per machine
+ngrok http 8000                             # auto-uses your static domain if you have exactly one
+ngrok http 8000 --url https://YOUR-DOMAIN.ngrok-free.dev   # or pin it explicitly
+```
+
+The free tier shows browsers a "You are about to visit…" interstitial. Click **Visit Site** once
+per session. It does not affect GitHub's webhook deliveries, which are not browser requests.
+
+Read the public URL back without opening the dashboard:
+
+```powershell
+(Invoke-RestMethod http://127.0.0.1:4040/api/tunnels).tunnels[0].public_url
+```
+
+#### b. GitHub OAuth App
+
+**Settings → Developer settings → OAuth Apps → New OAuth App.** Not *GitHub Apps* — see the
+warning below.
+
+| Field | Value |
+|---|---|
+| Application name | anything, e.g. `Verixa (dev — Farheen)` |
+| Homepage URL | `https://cognition-skimmer-launder.ngrok-free.dev` |
+| Authorization callback URL | `https://cognition-skimmer-launder.ngrok-free.dev/auth/github/callback` |
+
+Then **Generate a new client secret** — GitHub shows it only once — and put both values in `.env`
+as `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
+
+> **Use an OAuth App, not a GitHub App.** They look similar in the UI and both offer a client ID
+> and secret, but the client ID gives it away: OAuth Apps start with `Ov` or are 20 hex characters,
+> GitHub Apps start with `Iv`. A GitHub App will not work here, because:
+> * it ignores the `scope=repo` parameter `integrations.py:54` sends — permissions come from the
+>   app's own configuration instead;
+> * its token only sees repositories where the app has been *installed*, so `list_repos`, which
+>   keeps only repositories with `permissions.admin`, is likely to return an empty dropdown.
+
+Two more traps:
+
+* **You need admin access on a repository for it to appear at all.** `list_repos`
+  (`integrations.py:80`) filters to `permissions.admin`, because creating a webhook requires it.
+* **One OAuth App has one callback URL.** Each developer with their own tunnel domain needs their
+  own OAuth App.
+
+#### c. Atlassian OAuth 2.0 app
+
+You need a **Jira Cloud site** first: `atlassian_exchange` reads `accessible-resources` and takes
+the first site it finds, and with none it fails with *"No Jira site found on this Atlassian
+account"*. A free site from atlassian.com/software/jira is enough.
+
+**developer.atlassian.com/console/myapps → Create → OAuth 2.0 integration.** The scopes and the
+callback live on two different pages:
+
+1. **Permissions** → **Jira API** → *Add*, then *Configure* → the **Classic scopes** tab → tick
+   `read:jira-work`, `write:jira-work`, `read:jira-user`. These are the three in `ATLASSIAN_SCOPE`
+   (`integrations.py:13`). Classic, not Granular — the code asks for the classic names.
+   `offline_access` is not listed here; it is a standard OAuth scope requested in the authorize URL
+   to get a refresh token, and needs no console setting.
+2. **Authorization** → **OAuth 2.0 (3LO)** → *Configure* → Callback URL:
+   `https://cognition-skimmer-launder.ngrok-free.dev/auth/atlassian/callback`
+3. **Settings** → *Authentication details* → copy the **Client ID** and **Secret** into
+   `ATLASSIAN_CLIENT_ID` and `ATLASSIAN_CLIENT_SECRET`. Atlassian lets you re-reveal the secret
+   later, unlike GitHub.
+
+While the app is in development mode **only the Atlassian account that owns it can authorize it** —
+anyone else sees *"You don't have access to this app"*. Fix it on the **Distribution** page by
+setting it to Sharing, or let each developer create their own app.
+
+#### d. The webhook
+
+There is nothing to register by hand. `/api/connect` creates the pull request webhook itself
+(`ensure_webhook`), pings it, and updates its own hook rather than duplicating it on reconnect.
+For reference, if you ever add one manually: payload URL
+`https://cognition-skimmer-launder.ngrok-free.dev/webhooks/github`, content type
+`application/json`, secret = `WEBHOOK_SECRET` from `.env`, events = **Pull requests** only.
+
+#### e. Checking the credentials without a browser
+
+GitHub's token endpoint validates the client ID and secret *before* it looks at anything else, so a
+deliberately invalid code tells you whether the pair is right:
+
+```powershell
+.\.venv\Scripts\python.exe -c "import httpx; from dotenv import dotenv_values; v=dotenv_values('.env'); print(httpx.post('https://github.com/login/oauth/access_token', headers={'Accept':'application/json'}, data={'client_id':v['GITHUB_CLIENT_ID'],'client_secret':v['GITHUB_CLIENT_SECRET'],'code':'bad','redirect_uri':v['PUBLIC_URL']+'/auth/github/callback'}, timeout=20).json())"
+```
+
+| Response | Meaning |
+|---|---|
+| `bad_verification_code` | **ID and secret are both correct.** Only the fake code was rejected |
+| `redirect_uri_mismatch` | ID and secret are correct, but the app's registered callback URL differs from `PUBLIC_URL` |
+| `incorrect_client_credentials` | The ID and secret do not match |
+
+#### f. After editing .env
+
+`uvicorn --reload` watches Python files, **not `.env`**. Restart the server by hand.
+
+And once `PUBLIC_URL` is `https`, the session cookie is marked `Secure` (`main.py:36`), so signing
+in over plain `http://localhost:8000` appears to succeed but the browser drops the cookie and you
+look logged out. Use the tunnel URL.
 
 ---
 
