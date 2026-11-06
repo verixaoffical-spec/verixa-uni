@@ -106,6 +106,16 @@ def auth_page(request: Request, db: Session = Depends(get_db)):
     return auth.page_redirect_if_signed_in(request, db) or FileResponse(FRONTEND / "auth.html", headers=NO_STORE)
 
 
+@app.get("/privacy")
+def privacy_page():
+    return FileResponse(FRONTEND / "privacy.html")
+
+
+@app.get("/terms")
+def terms_page():
+    return FileResponse(FRONTEND / "terms.html")
+
+
 @app.get(auth.APP)
 def dashboard(request: Request, db: Session = Depends(get_db)):
     """The dashboard needs an account. Anyone else goes to log in, and comes back here afterwards."""
