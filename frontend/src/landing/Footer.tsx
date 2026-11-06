@@ -32,9 +32,9 @@ export default function Footer() {
           </div>
           <nav className="curtain-row small" aria-label="Footer">
             <a href="/login" className="curtain-pill quiet" {...magnetic}>Log in</a>
-            <a href="#" className="curtain-pill quiet" {...magnetic}>Privacy Policy</a>
-            <a href="#" className="curtain-pill quiet" {...magnetic}>Terms of Service</a>
-            <a href="#" className="curtain-pill quiet" {...magnetic}>Support</a>
+            <a href="/privacy" className="curtain-pill quiet" {...magnetic}>Privacy Policy</a>
+            <a href="/terms" className="curtain-pill quiet" {...magnetic}>Terms of Service</a>
+            <a href="mailto:verixa.offical@gmail.com" className="curtain-pill quiet" {...magnetic}>Support</a>
           </nav>
         </div>
 

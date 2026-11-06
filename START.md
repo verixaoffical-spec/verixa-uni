@@ -108,7 +108,7 @@ real GitHub sign in. Close this window when you finish, so its settings do not a
 ## Run the tests
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest tests.test_validators tests.test_library tests.test_accounts tests.test_crud tests.test_twofactor tests.test_risk_rules tests.test_analysis_integration tests.test_qa_security tests.test_risk_eval
+.\.venv\Scripts\python.exe -m unittest tests.test_validators tests.test_library tests.test_accounts tests.test_crud tests.test_twofactor tests.test_risk_rules tests.test_analysis_integration tests.test_qa_security tests.test_risk_eval tests.test_github_refresh tests.test_legal_pages
 ```
 
 The tests use their own temporary database and take about 3 minutes. For more cases to try by hand, see

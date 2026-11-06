@@ -22,12 +22,13 @@ import re
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from agents.trace import mask, trace
 
 from .agent_db import RiskAssessment, dump
 from .db import Project, SessionLocal, User
-from .security import unseal
+from .integrations import github_access_token
 
 log = logging.getLogger(__name__)
 
@@ -247,9 +248,9 @@ async def analyse_pull_request(payload: dict, delivery_id: str | None = None) ->
                 token = None
                 if user and user.github_token:
                     try:
-                        token = unseal(user.github_token)
+                        token = await run_in_threadpool(github_access_token, db, user)
                     except Exception:
-                        log.warning("could not decrypt the GitHub token of user %s", project.user_id)
+                        log.warning("could not read or renew the GitHub token of user %s", project.user_id)
                 jobs.append((row.id, token))
 
         for row_id, token in jobs:

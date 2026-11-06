@@ -21,8 +21,8 @@ from .accounts import (
 from .db import User, get_db
 from .integrations import (
     atlassian_authorize_url, atlassian_exchange, github_authorize_url, github_exchange, store_atlassian_tokens,
+    store_github_tokens,
 )
-from .security import seal
 from .settings import settings
 
 router = APIRouter(prefix="/auth")
@@ -224,7 +224,8 @@ def relink(request: Request, db: Session = Depends(get_db)):
     user = signed_in_user(request, db)
     if not user:
         raise HTTPException(401, "Sign in first")
-    user.github_token = user.atlassian_token = user.atlassian_refresh = user.atlassian_expires_at = None
+    user.github_token = user.github_refresh = user.github_expires_at = None
+    user.atlassian_token = user.atlassian_refresh = user.atlassian_expires_at = None
     db.commit()
     return Response(status_code=204)
 
@@ -237,7 +238,7 @@ def github_callback(request: Request, code: str | None = None, state: str | None
     if not _state_ok(request, state):
         return _fail(request, "Sign in expired. Please try again")
     try:
-        token, me = github_exchange(code)
+        tokens, me = github_exchange(code)
     except HTTPException as exc:
         return _fail(request, str(exc.detail))
     current = signed_in_user(request, db)
@@ -248,7 +249,7 @@ def github_callback(request: Request, code: str | None = None, state: str | None
     user.github_id = me["id"]
     user.github_login = me["login"]
     user.github_name = (me.get("name") or "")[:200] or None  # GitHub allows longer names than the column holds
-    user.github_token = seal(token)
+    store_github_tokens(user, tokens)
     db.add(user)
     db.commit()
     if not current:

@@ -7,16 +7,19 @@ uses, so the session cookie and the 401 contract ("the session is gone") are unc
 import logging
 from importlib.util import find_spec
 
+from cryptography.fernet import InvalidToken
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from .agent_db import RiskAssessment, to_json
 from .analysis_service import AgentUnavailable, analyse_now
 from .api import MAX_INT, current_user, project_of
 from .auth import _check_origin
 from .db import User, get_db
+from .integrations import github_access_token
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/analysis")
@@ -99,10 +102,9 @@ async def analyse(body: AnalyseIn, request: Request, user: User = Depends(curren
     if not user.github_token:
         raise HTTPException(409, "Link GitHub first, so Verixa can read the pull request")
 
-    from .security import unseal
     try:
-        token = unseal(user.github_token)
-    except Exception:
+        token = await run_in_threadpool(github_access_token, db, user)
+    except InvalidToken:
         raise HTTPException(409, "Your stored GitHub token could not be read. Link GitHub again")
 
     try:
