@@ -69,6 +69,7 @@ def script_github_and_model() -> None:
     good = {"reasoning": "The createCharge call in src/payments/session.ts changes how a payment is made, so a mistake costs money.",
             "suggested_test_areas": ["createCharge charges a card once", "a declined stripe charge makes no order"]}
     xss = "<img src=x onerror=alert('from-the-model')>"
+    fake_key = "AKIAIOSFODNN7" + "EXAMPLE"
 
     # number: (title, files, replies of the first model, replies of the second model). A reply of HANG never answers.
     hang, boom = "HANG", "BOOM"
@@ -91,6 +92,9 @@ def script_github_and_model() -> None:
                "suggested_test_areas": ["createCharge charges once", "stripe declines cleanly"]}], [good]),
         112: ("A slow answer", [pay], [("SLOW", good)], [good]),
         113: ("Provider errors quoting a key", [pay], [boom], [boom]),
+        115: ("Add a payment client", [{"filename": "src/payments/client.ts", "additions": 2, "deletions": 0,
+                                        "patch": f"@@ -1 +1 @@\n+const key = '{fake_key}';\n+const charge = stripe.createCharge(key);\n"}],
+              ["ECHO"], [good]),
         114: ("Invented explanation", [pay], [{"reasoning": "This adds redirect loop detection to the Kubernetes ingress, with a new vulnerability.",
                                                "suggested_test_areas": ["pods autoscale", "ingress reloads"]}], [hang]),
     }
@@ -107,6 +111,10 @@ def script_github_and_model() -> None:
             key = f"{number}-{self.which}"
             step = replies[min(seen.get(key, 0), len(replies) - 1)]
             seen[key] = seen.get(key, 0) + 1
+            if step == "ECHO":  # repeats whatever it was given, the worst thing a model could do with a secret
+                quoted = "this key: " + fake_key if fake_key in prompt else "no key at all"
+                step = {"reasoning": f"The createCharge call in src/payments/client.ts was sent {quoted}.",
+                        "suggested_test_areas": ["createCharge charges once", "a declined stripe charge"]}
             if step == hang:
                 await asyncio.sleep(3600)
             if step == boom:

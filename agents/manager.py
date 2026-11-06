@@ -19,7 +19,8 @@ LABELS = ["Low", "Medium", "High"]
 GENERIC_WORDS = {"this", "that", "with", "from", "have", "been", "will", "they", "their", "only", "file", "files", "code",
                  "line", "lines", "change", "changes", "changed", "test", "tests", "check", "checks", "module", "risk",
                  "label", "score", "small", "large", "size", "http", "https", "github", "null", "true", "false", "none",
-                 "return", "value", "values", "repo", "repository", "pull", "request", "requests", "update", "updates"}
+                 "return", "value", "values", "repo", "repository", "pull", "request", "requests", "update", "updates",
+                 "hidden", "secret"}  # the [HIDDEN SECRET] placeholder is ours, not the author's code
 
 
 # Text that waves a change through. A label comes from rules, so an explanation never gets to say this,

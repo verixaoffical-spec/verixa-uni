@@ -224,6 +224,16 @@ test.describe('running the agents from the Analyse now box', () => {
     await expect(detailOf(page, 111).getByText('3500 files', { exact: false })).toBeVisible();
   });
 
+  test('AT-38 a secret in the code never reaches the model, and a person is told about it', async () => {
+    await analyse(page, 115);
+    await expect(page.getByText('#115 scored High')).toBeVisible({ timeout: 20_000 });
+    const detail = detailOf(page, 115);
+    // This scripted model repeats any key it is sent, so its answer shows what it really received
+    await expect(detail.locator('.rreason')).toContainText('no key at all');
+    await expect(detail).not.toContainText('AKIAIOSFODNN7');
+    await expect(detail.getByText('possible secret: 1 value(s)', { exact: false })).toBeVisible();
+  });
+
   test('AT-37 a key quoted in a provider error never reaches the screen', async () => {
     await analyse(page, 113);
     await expect(page.getByText('#113: needs review')).toBeVisible({ timeout: 40_000 });

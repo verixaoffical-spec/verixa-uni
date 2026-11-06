@@ -7,14 +7,13 @@ reasoning behind it, is in [AGENT_TESTING.md](AGENT_TESTING.md).
 
 | Check | Result |
 |---|---|
-| Python tests (`tests/`) | **329 of 329 pass.** 263 existed before, 66 are new |
-| Browser tests, GitHub and model scripted | **30 of 30 pass** |
+| Python tests (`tests/`) | **345 of 345 pass.** 263 existed before, 82 are new |
+| Browser tests, GitHub and model scripted | **31 of 31 pass** |
 | Browser tests, real GitHub and real model | **5 of 5 pass**, on Shoplite #7, #9 and #10 |
 | Prompt injection, real model | **Not obeyed in 5 of 5**, one run each, judged by reading the answers |
 | Real answers that got through the stricter checks | **8 of 8**, on the first attempt |
 
-**Still open:** the Shoplite webhook (AT-43) needs the repository owner, and sending secrets in a diff to the model provider
-(AT-38) needs a team decision. See [What is still open](#what-is-still-open).
+**Still open:** the Shoplite webhook (AT-43) needs the repository owner. See [What is still open](#what-is-still-open).
 
 ---
 
@@ -35,6 +34,7 @@ tests for a model that never answers hung until stopped. All of them pass now.
 | AT-30 | Pull requests over 300 files were cut off with no warning | Reads all that GitHub lists, up to its limit of 3000. Beyond that, a factor says how many were read | `agents/github_client.py`, `agents/analysis.py`, `agents/risk_rules.py` |
 | AT-32 | `src/modules/auth/x.js` counted as module `modules` | It now counts as `auth`, so past fixes are searched in `src/modules/auth` | `agents/risk_rules.py` |
 | AT-37 | Key-like text in provider errors was saved on the row and shown on screen | Masked before saving | `backend/analysis_service.py`, `agents/analysis.py` |
+| AT-38 | A secret in a changed line or the title was sent to the model provider | Hidden as `[HIDDEN SECRET]` before anything is sent. The model still sees the rest of the change. The row tells a person how many were found | `agents/redact.py`, `agents/analysis.py`, `agents/manager.py` |
 
 ### Behaviour you may notice
 
@@ -46,6 +46,11 @@ tests for a model that never answers hung until stopped. All of them pass now.
   already handled.
 
 ### What these fixes cannot do
+
+**Hiding secrets** finds known key formats (GitHub, AWS, Stripe, Slack, Groq, Google, JSON web tokens, private keys, passwords in
+database addresses) and values given to names such as `password` or `api_key`. A secret with no known format and no telling name,
+such as `const x = "kd8Hs2mQ"`, still gets through. It also does not remove a secret from GitHub: anyone who can read the
+pull request can still see it, so a real key must be replaced.
 
 The explanation checks compare words. They raise the bar, but they cannot prove a claim is true:
 
@@ -74,7 +79,7 @@ Two events were added with the fixes: `run.timed_out` and `service.commit_moved`
 
 ## Tests performed
 
-### Python tests: 329 of 329 pass
+### Python tests: 345 of 345 pass
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -t .
@@ -84,11 +89,12 @@ Two events were added with the fixes: `run.timed_out` and `service.commit_moved`
 |---|---|---|
 | `tests/test_agents_real.py` (new) | 56 | The real Manager and Analysis Agent, with only GitHub and the model faked. Test names carry their AT number |
 | `tests/test_agent_trace.py` (new) | 10 | The trace log, the run ID, and no token in the log |
-| Existing files | 263 | Everything from before. One changed: the list of allowed files in `agents/` now includes `trace.py` |
+| `tests/test_agent_secrets.py` (new) | 16 | Each secret format, ordinary code left alone, and the prompt holding no secret, including on a retry and across the trim |
+| Existing files | 263 | Everything from before. One changed: the list of allowed files in `agents/` now includes `trace.py` and `redact.py` |
 
 The fake model plays back a script, including answers that never arrive, so failures are repeatable and use no API quota.
 
-### Browser tests, scripted: 30 of 30 pass
+### Browser tests, scripted: 31 of 31 pass
 
 Real Chromium against the real app and agents. Only GitHub and the model are scripted, one situation per pull request number.
 Each test also fails on any alert, page error or blocked resource.
@@ -97,7 +103,7 @@ Each test also fails on any alert, page error or blocked resource.
 |---|---|---|
 | Access | 3 | Another account's results are hidden on screen and through the API. No session goes to login. No repository shows the connect message |
 | Showing saved results | 6 | Tiles match the API. Row details. Opening a row by keyboard. Needs review and Failed rows show their reasons. Hostile text stays plain |
-| Analyse now | 15 | Good answers, retries, three bad answers, a model hanging, every model hanging, a hostile title, an invented explanation, HTML in an answer, a missing pull request, blocked lookups, a huge pull request, a key in an error, the busy state, number-only input |
+| Analyse now | 16 | A secret in the code, good answers, retries, three bad answers, a model hanging, every model hanging, a hostile title, an invented explanation, HTML in an answer, a missing pull request, blocked lookups, a huge pull request, a key in an error, the busy state, number-only input |
 | Webhooks | 4 | Bad signature refused, signed delivery scored and shown, a repeat makes one row, a push during analysis shows the commit really read |
 | Trace log | 2 | A run from the screen can be followed in the log. No key in the log |
 
@@ -151,7 +157,6 @@ Reading the answers turned up three things that no automated check catches:
 | Item | What is needed |
 |---|---|
 | **AT-43** Two Shoplite hooks send to `/webhook/github` and get 405 | Using the owner account, open Shoplite Settings, Webhooks, and check Recent Deliveries. Point them at `/webhooks/github`, or delete them if a correct one exists |
-| **AT-38** Secrets in a changed line are sent to the model provider | A team decision: keep sending, mask, or skip the model for that pull request |
 | **AT-28** Canary test, **AT-34** test area quality | Need new pull requests on Shoplite, and a person to judge the results. No new pull requests were opened |
 | **AT-37** Crash tracebacks in the server console are not masked | The database, screen and trace log are masked. The raw console traceback is not |
 | **`GITHUB_TOKEN` in `.env`** gets a 401 | Replace it. It only affects scripts and direct runs |
