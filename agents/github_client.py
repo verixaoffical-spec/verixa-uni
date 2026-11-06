@@ -52,7 +52,7 @@ def fetch_pr(repo: str, number: int, token: str | None = None) -> tuple[dict, li
         pr = c.get(f"{API}/repos/{repo}/pulls/{number}")
         pr.raise_for_status()
         files: list[dict] = []
-        for page in range(1, 4):  # up to 300 files
+        for page in range(1, 31):  # GitHub lists at most 3000 files, 100 to a page
             r = c.get(
                 f"{API}/repos/{repo}/pulls/{number}/files",
                 params={"per_page": 100, "page": page},

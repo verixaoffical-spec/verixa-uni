@@ -23,6 +23,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from agents.trace import mask, trace
+
 from .agent_db import RiskAssessment, dump
 from .db import Project, SessionLocal, User
 from .security import unseal
@@ -124,6 +126,23 @@ def store_result(db: Session, row_id: int, result: dict, facts: dict | None) -> 
         log.info("risk row %s disappeared while the agent was running", row_id)
         return
 
+    # GitHub only ever serves the newest commit, so a push during the run means the agent read a later commit than
+    # the one this row was created for. The row must describe what was really read.
+    requested_sha, read_sha = row.head_sha, (facts or {}).get("head_sha")
+    if read_sha and read_sha != requested_sha:
+        scored_elsewhere = db.scalar(select(RiskAssessment.id).where(
+            RiskAssessment.project_id == row.project_id, RiskAssessment.pr_number == row.pr_number,
+            RiskAssessment.head_sha == read_sha, RiskAssessment.id != row.id))
+        trace("service.commit_moved", f"{row.repo}#{row.pr_number}", row_id=row_id, requested_sha=requested_sha,
+              read_sha=read_sha, already_has_a_row=bool(scored_elsewhere))
+        if scored_elsewhere:  # the newer commit has its own row, so this older commit can never be scored now
+            row.state = "failed"
+            row.errors = dump([f"Commit {requested_sha[:7]} was replaced by {read_sha[:7]} before it could be scored. "
+                               f"See the row for {read_sha[:7]}."])
+            db.commit()
+            return
+        row.head_sha = read_sha
+
     analysis = result.get("analysis") or {}
     if facts:
         row.risk_label = facts.get("risk_label")
@@ -148,11 +167,14 @@ def store_result(db: Session, row_id: int, result: dict, facts: dict | None) -> 
     row.model_used = (analysis.get("model") or "")[:120] or None
 
     row.attempts = result.get("attempts") or 0
-    errors = result.get("errors") or []
+    errors = [mask(error) for error in result.get("errors") or []]  # a provider's error text can quote a key
     row.errors = dump(errors) if errors else None
     row.state = "scored" if result.get("status") == "approved" else "needs_human_review"
     db.commit()
     log.info("risk row %s -> %s (%s)", row_id, row.state, row.risk_label)
+    trace("service.saved", f"{row.repo}#{row.pr_number}", result_of_run=result.get("run_id"), row_id=row_id, state=row.state,
+          risk_label=row.risk_label, head_sha_of_row=row.head_sha, head_sha_read=read_sha, head_sha_requested=requested_sha,
+          same_commit=None if not read_sha else read_sha == row.head_sha)
 
 
 def mark_failed(row_id: int, message: str) -> None:
@@ -160,8 +182,9 @@ def mark_failed(row_id: int, message: str) -> None:
         row = db.get(RiskAssessment, row_id)
         if row:
             row.state = "failed"
-            row.errors = dump([message[:500]])
+            row.errors = dump([mask(message)[:500]])
             db.commit()
+            trace("service.failed", f"{row.repo}#{row.pr_number}", row_id=row_id, head_sha_of_row=row.head_sha, error=message[:300])
 
 
 async def _score_one(row_id: int, pr_id: str, token: str | None) -> None:
@@ -204,6 +227,7 @@ async def analyse_pull_request(payload: dict, delivery_id: str | None = None) ->
         log.info("pull_request event without the fields we need, ignored")
         return
     pr_id = f"{facts['repo']}#{facts['pr_number']}"
+    trace("service.delivery", pr_id, delivery_id=delivery_id, head_sha=facts["head_sha"], action=payload.get("action"))
 
     async with _LOCKS.setdefault(pr_id, asyncio.Lock()):
         # A repository can belong to several accounts (projects.repo is not unique), and each one
@@ -217,6 +241,7 @@ async def analyse_pull_request(payload: dict, delivery_id: str | None = None) ->
             for project in projects:
                 row = claim(db, project.id, facts, delivery_id)
                 if row is None:
+                    trace("service.skipped", pr_id, project_id=project.id, head_sha=facts["head_sha"], reason="already handled")
                     continue
                 user = db.get(User, project.user_id)
                 token = None

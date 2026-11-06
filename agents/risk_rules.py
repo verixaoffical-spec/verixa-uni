@@ -15,6 +15,7 @@ HIGH_WORDS = {"auth", "authn", "authz", "authentication", "authorization", "logi
 MEDIUM_WORDS = {"user", "account", "profile", "cart", "order", "inventory", "email", "upload",
                 "notification", "admin", "config", "migration", "schema", "database", "db"}
 WRAPPER_DIRS = {"src", "app", "apps", "lib", "packages"}
+MODULE_DIRS = {"modules", "module"}  # src/modules/auth is the auth module, not one module called "modules"
 RANK = {"Low": 0, "Medium": 1, "High": 2}
 LABELS = ["Low", "Medium", "High"]
 
@@ -43,9 +44,10 @@ def module_of(path: str) -> tuple[str, str]:
     parts = path.split("/")
     if len(parts) == 1:
         return "root", ""
-    if parts[0] in WRAPPER_DIRS and len(parts) > 2:
-        return parts[1], "/".join(parts[:2])
-    return parts[0], parts[0]
+    at = 1 if parts[0] in WRAPPER_DIRS and len(parts) > 2 else 0
+    if parts[at] in MODULE_DIRS and len(parts) > at + 2:
+        at += 1
+    return parts[at], "/".join(parts[:at + 1])
 
 
 def size_points(files: int, lines: int) -> int:
@@ -86,7 +88,9 @@ def sensitivity(files: list[dict]) -> dict:
     return {"level": "none", "reasons": []}
 
 
-def assess(files: list[dict], defects: int, defect_note: str = "") -> dict:
+def assess(files: list[dict], defects: int, defect_note: str = "", history_known: bool = True, total_files: int | None = None) -> dict:
+    """history_known=False: every defect lookup failed, which says nothing about the module's history.
+    total_files: how many files the pull request really has, when GitHub would not list them all."""
     lines = sum(f["additions"] + f["deletions"] for f in files)
     size = size_points(len(files), lines)
     d_pts = defect_points(defects)
@@ -108,8 +112,16 @@ def assess(files: list[dict], defects: int, defect_note: str = "") -> dict:
             label, reason = fl, why
 
     factors = [f"size: {len(files)} file(s), {lines} lines changed ({size} pts)"]
-    factors.append(f"defect history: {defects} past fix(es) in this module ({d_pts} pts)" if defects
-                   else "defect history: none found" + (f" ({defect_note})" if defect_note else ""))
+    if total_files and total_files > len(files):
+        factors.append(f"incomplete: only {len(files)} of {total_files} changed files could be read, "
+                       "so the real risk may be higher")
+    note = f" ({defect_note})" if defect_note else ""
+    if not history_known:
+        factors.append(f"defect history: unknown, counted as 0 pts, so the real risk may be higher{note}")
+    elif defects:
+        factors.append(f"defect history: {defects} past fix(es) in this module ({d_pts} pts){note}")
+    else:
+        factors.append(f"defect history: none found{note}")
     factors.append(f"sensitive area: {sens['level']}" + (f" - {'; '.join(sens['reasons'])}" if sens["reasons"] else "")
                    + f" ({s_pts} pts)")
     factors.append(f"score {score} gives {base}" + (f", raised to {label}: {reason}" if reason else ""))

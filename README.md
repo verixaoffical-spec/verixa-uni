@@ -369,8 +369,9 @@ it the label is final and not to question it. Models are tried in the order of
 instantly.
 
 **The Manager** (`agents/manager.py`, T-035) then validates that output in plain code: valid JSON,
-reasoning of a reasonable length that does not contradict the label and mentions something from the
-changed code, and 2 to 6 non-empty test areas. A rejected answer is sent back with the specific problems appended to the prompt. After
+reasoning of a reasonable length that does not contradict the label, names a changed file or uses two
+words from the changed code, and does not call the change safe, and 2 to 6 non-empty test areas, at
+least half of them about the changed code. A rejected answer is sent back with the specific problems appended to the prompt. After
 **three** attempts the pull request is escalated as `needs_human_review`, with the rule-based label
 still attached — the label never depends on the model succeeding.
 
@@ -572,6 +573,10 @@ own temporary account and remove it again, even if a step fails.
 Run `live_check.py` from this folder, or set `PYTHONPATH` to it, so `backend` and `agents` import.
 
 Frontend: `cd frontend; npm run typecheck` (no build) or `npm run build`.
+
+The test plan for the Manager and Analysis Agents, and how to trace a run with their logs, is in
+[AGENT_TESTING.md](AGENT_TESTING.md). The latest fixes and test results, including the browser tests, are in
+[AGENT_TEST_RESULTS.md](AGENT_TEST_RESULTS.md).
 
 ---
 
