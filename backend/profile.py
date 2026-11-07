@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from .accounts import hash_password, name_problem, normalize_name, password_problem
 from .api import current_user, remove_project
 from .auth import _check_origin, _field_error, account_json
-from .db import RecoveryCode, User, get_db
+from .db import PasswordReset, RecoveryCode, User, get_db
 from .twofactor import ConfirmIn, _confirm_identity, _counted, _second_factor, _sign_out_other_sessions
 
 router = APIRouter(prefix="/api/account")
@@ -64,6 +64,7 @@ def delete_account(body: ConfirmIn, request: Request, user: User = Depends(curre
         _counted(request, user, lambda: _second_factor(db, user, body.code))
     remove_project(db, user)
     db.execute(delete(RecoveryCode).where(RecoveryCode.user_id == user.id))
+    db.execute(delete(PasswordReset).where(PasswordReset.user_id == user.id))
     db.delete(user)
     db.commit()
     request.session.clear()

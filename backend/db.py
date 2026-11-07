@@ -50,6 +50,16 @@ class RecoveryCode(Base):
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class PasswordReset(Base):
+    """A forgot password link. Only a hash of its token is stored, so a copy of the database cannot reset anyone."""
+    __tablename__ = "password_resets"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class Project(Base):
     """One connected repository and Jira project per user."""
     __tablename__ = "projects"

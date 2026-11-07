@@ -73,6 +73,16 @@ def fingerprint(text: str | None) -> str:
     return hashlib.sha256((text or "").encode("utf-8", "replace")).hexdigest()[:16]
 
 
+_listeners: list = []
+
+
+def add_listener(listener) -> None:
+    """Calls listener(line) for every trace line, after it is masked. The backend uses this to push live status
+    to the dashboard. A listener runs on whatever thread logged the line, and its errors are ignored."""
+    if listener not in _listeners:
+        _listeners.append(listener)
+
+
 def trace(event: str, pr_id: str | None = None, **fields) -> None:
     try:
         _setup()
@@ -81,7 +91,12 @@ def trace(event: str, pr_id: str | None = None, **fields) -> None:
                 "pr_id": pr_id or run_pr, "event": event, **{k: mask(v) for k, v in fields.items()}}
         _logger.info(event, extra={"fields": line})
     except Exception:
-        pass
+        return
+    for listener in list(_listeners):
+        try:
+            listener(line)
+        except Exception:
+            pass
 
 
 @contextmanager

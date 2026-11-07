@@ -13,6 +13,7 @@ export default defineConfig({
   projects: [
     { name: 'controlled', testMatch: 'agents.spec.ts', use: { baseURL: 'http://localhost:8011', browserName: 'chromium' } },
     { name: 'live', testMatch: 'agents.live.spec.ts', timeout: 300_000, use: { baseURL: 'http://localhost:8012', browserName: 'chromium' } },
+    { name: 'forgot', testMatch: 'forgot_password.spec.ts', use: { baseURL: 'http://localhost:8011', browserName: 'chromium', screenshot: 'only-on-failure' } },
   ],
   webServer: {
     command: `"${python}" tests/e2e/server.py${live ? ' --live' : ''}`,

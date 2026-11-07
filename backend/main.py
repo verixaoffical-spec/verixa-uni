@@ -1,5 +1,6 @@
 import json
 import os
+import urllib.parse as up
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -13,9 +14,11 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import analysis_api, api, auth, profile, twofactor
+from agents.trace import add_listener
+
+from . import analysis_api, api, auth, live, password_reset, profile, twofactor
 from .agent_db import init_agent_db
-from .analysis_service import HANDLED_ACTIONS, analyse_pull_request
+from .analysis_service import HANDLED_ACTIONS, analyse_pull_request, apply_check_suite
 from .db import Project, SessionLocal, get_db, init_db, now
 from .security import valid_signature
 from .settings import settings
@@ -30,6 +33,7 @@ if not FRONTEND.is_dir():
 async def lifespan(app: FastAPI):
     init_db()        # the five tables this app owns
     init_agent_db()  # risk_assessments, owned by the Analysis Agent
+    add_listener(live.hub.publish)  # agent steps are pushed to the dashboard over a WebSocket
     yield
 
 
@@ -48,7 +52,9 @@ MAX_BODY_BYTES = 32 * 1024 * 1024  # 50 specs at 500 KB plus a 5 MB collection, 
 
 # Even if a script ever got into a page, the browser refuses to run it: only script files from this site are allowed.
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-       "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; media-src 'self'; connect-src 'self'; "
+       "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; media-src 'self'; "
+       # The live status WebSocket. Older browsers do not count ws:// and wss:// as 'self', so the address is named.
+       f"connect-src 'self' {'wss' if settings.public_url.startswith('https') else 'ws'}://{up.urlsplit(settings.public_url).netloc}; "
        "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
 SWAGGER_PAGE = "/docs"  # loads its scripts from a CDN, and never exists on a public address
 
@@ -95,6 +101,8 @@ async def security_headers(request: Request, call_next):
 app.include_router(auth.router)
 app.include_router(twofactor.router)
 app.include_router(profile.router)
+app.include_router(password_reset.router)
+app.include_router(live.router)
 
 # Pages that depend on who is signed in are never cached, so Back after logging out cannot show them again.
 NO_STORE = {"Cache-Control": "no-store"}
@@ -102,8 +110,15 @@ NO_STORE = {"Cache-Control": "no-store"}
 
 @app.get("/login")
 @app.get("/signup")
+@app.get("/forgot-password")
 def auth_page(request: Request, db: Session = Depends(get_db)):
     return auth.page_redirect_if_signed_in(request, db) or FileResponse(FRONTEND / "auth.html", headers=NO_STORE)
+
+
+@app.get("/reset-password")
+def reset_page():
+    """Open even when signed in: the link from the email must work whichever account this browser is using."""
+    return FileResponse(FRONTEND / "auth.html", headers=NO_STORE)
 
 
 @app.get(auth.APP)
@@ -152,6 +167,9 @@ async def github_webhook(request: Request, background: BackgroundTasks):
     event = request.headers.get("x-github-event")
     if event == "pull_request" and str(payload.get("action")) in HANDLED_ACTIONS:
         background.add_task(analyse_pull_request, payload, request.headers.get("x-github-delivery"))
+    elif event == "check_suite" and payload.get("action") == "completed":
+        # CI finished on a commit: a failing build or test run raises that commit's saved label to High
+        background.add_task(apply_check_suite, payload)
     return {"received": event}
 
 
