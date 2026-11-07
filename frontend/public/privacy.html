@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy · Verixa</title>
+<meta name="description" content="What personal data Verixa stores, why it is needed, who receives it and how to delete it.">
+<link rel="icon" href="/assets/verixa-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/legal.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="/"><img src="/assets/verixa-logo.png" alt="">Verixa</a>
+    <a href="/terms">Terms of Service</a>
+  </header>
+  <main>
+    <h1>Privacy <em>Policy</em></h1>
+    <p class="date">Effective 7 November 2026</p>
+    <p class="intro">Verixa is a university project that scores the risk of GitHub pull requests. This page explains what personal data it stores, why, and how to remove it. We do not sell personal data or use it for advertising.</p>
+
+    <h2>What we store</h2>
+    <div class="table"><table>
+      <thead><tr><th>Data</th><th>Why it is needed</th></tr></thead>
+      <tbody>
+        <tr><td><b>Account:</b> name, email address and a salted hash of your password</td><td>To create your account and log you in. We cannot read your password.</td></tr>
+        <tr><td><b>GitHub:</b> user ID, username, display name and encrypted access and refresh tokens</td><td>To sign you in with GitHub, list your repositories, manage the webhook and read pull requests.</td></tr>
+        <tr><td><b>Atlassian:</b> encrypted access and refresh tokens, Jira site name and site ID</td><td>To list your Jira projects. We do not store your Atlassian profile or account ID.</td></tr>
+        <tr><td><b>Two-step verification:</b> an encrypted secret and hashed recovery codes</td><td>To check your sign in codes, if you turn this on.</td></tr>
+        <tr><td><b>Project:</b> repository name, Jira project, uploaded Playwright specs and Postman collection</td><td>To run your workspace and Test Library. Do not put secrets or personal data in these files.</td></tr>
+        <tr><td><b>Pull request results:</b> repository, number, title, link, author's GitHub username, commit ID, changed file counts and names, score, reasons, AI explanation and suggested test areas</td><td>To show the Risk Analysis screen.</td></tr>
+      </tbody>
+    </table></div>
+    <p>The code changes in a pull request are read to work out its score, and are not saved in the database. Short parts of a result, such as file names and the start of an AI answer, can appear in the server's technical logs.</p>
+
+    <h2>Cookies and browser storage</h2>
+    <p>We use one login cookie, which lasts up to 14 days, and browser storage for your light or dark theme. We do not use advertising or tracking cookies.</p>
+
+    <h2>Who receives data</h2>
+    <p>Verixa uses these outside services to work:</p>
+    <ul>
+      <li><b>GitHub</b> and <b>Atlassian:</b> the accounts you choose to connect.</li>
+      <li><b>Neon:</b> hosts the database.</li>
+      <li><b>AI model providers:</b> currently Groq. OpenRouter or Google Gemini can be set up as backups. They receive the pull request title, file names and part of the code changes. Verixa replaces values that look like secrets before sending, but it cannot recognise every secret, so private code can still be included.</li>
+      <li><b>ngrok:</b> carries traffic to the app when it runs through a tunnel.</li>
+      <li><b>Google Fonts:</b> supplies the fonts on our pages, so Google can receive your IP address.</li>
+    </ul>
+
+    <h2>How long we keep it</h2>
+    <p>We keep your data until you disconnect your project or delete your account. Technical logs have no automatic deletion date, and are cleared by the project team. An outside service may keep data under its own policy.</p>
+
+    <h2>Your choices</h2>
+    <ul>
+      <li><b>Name:</b> change it in your account settings.</li>
+      <li><b>Disconnect:</b> removes the webhook, Test Library and pull request results for your project.</li>
+      <li><b>Delete account:</b> removes your account, saved tokens, recovery codes and project data from the database. It does not revoke access on GitHub or Atlassian, which you can do in their settings.</li>
+      <li><b>Questions or a copy of your data:</b> email us using the address below.</li>
+    </ul>
+
+    <h2>Security</h2>
+    <p>Passwords are hashed with scrypt, and saved tokens and two-step secrets are encrypted. Verixa asks GitHub for the <b>repo</b> permission, which is broad: it allows reading and writing your repositories, although the agents only read them. No online service is perfectly secure, so please connect only repositories you are comfortable using with a student project.</p>
+
+    <h2>Changes and contact</h2>
+    <p>If this policy changes, we will update this page and its date. Contact: <a href="mailto:verixa.offical@gmail.com">verixa.offical@gmail.com</a></p>
+  </main>
+  <footer class="end"><a href="/">Home</a><a href="/terms">Terms of Service</a></footer>
+</div>
+</body>
+</html>

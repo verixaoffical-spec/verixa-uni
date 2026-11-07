@@ -12,9 +12,10 @@ from .accounts import Throttle
 from .agent_db import RiskAssessment
 from .auth import _check_origin, account_json, signed_in_user
 from .db import Collection, Project, SpecFile, User, get_db
-from .integrations import delete_webhook, ensure_webhook, list_jira_projects, list_repos, ping_webhook, webhook_url
+from .integrations import (
+    delete_webhook, ensure_webhook, github_access_token, list_jira_projects, list_repos, ping_webhook, webhook_url,
+)
 from .library import ApplyError, plan_apply
-from .security import unseal
 from .validators import MAX_SPECS
 
 router = APIRouter(prefix="/api")
@@ -42,7 +43,7 @@ def remove_project(db: Session, user: User) -> None:
         return
     if project.hook_id and user.github_token:
         try:
-            delete_webhook(unseal(user.github_token), project.repo, project.hook_id)
+            delete_webhook(github_access_token(db, user), project.repo, project.hook_id)
         except (HTTPException, InvalidToken):
             pass
     db.execute(delete(SpecFile).where(SpecFile.project_id == project.id))
@@ -85,7 +86,7 @@ def session(request: Request, db: Session = Depends(get_db)):
 def targets(user: User = Depends(current_user), db: Session = Depends(get_db)):
     if not user.github_token or not user.atlassian_token:
         raise HTTPException(403, NOT_LINKED)
-    return {"repos": list_repos(unseal(user.github_token)), "projects": list_jira_projects(db, user)}
+    return {"repos": list_repos(github_access_token(db, user)), "projects": list_jira_projects(db, user)}
 
 
 class ConnectIn(BaseModel):
@@ -116,7 +117,7 @@ def connect(body: ConnectIn, request: Request, user: User = Depends(current_user
     _check_origin(request)
     if not user.github_token or not user.atlassian_token:
         raise HTTPException(403, NOT_LINKED)
-    token = unseal(user.github_token)
+    token = github_access_token(db, user)
     jira = next((p for p in list_jira_projects(db, user) if p["key"] == body.project_key), None)
     if not jira:
         raise HTTPException(400, "That Jira project was not found")

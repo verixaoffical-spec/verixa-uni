@@ -30,6 +30,8 @@ class User(Base):
     github_login: Mapped[str | None] = mapped_column(String(100))
     github_name: Mapped[str | None] = mapped_column(String(200))
     github_token: Mapped[str | None] = mapped_column(Text)  # encrypted
+    github_refresh: Mapped[str | None] = mapped_column(Text)  # encrypted
+    github_expires_at: Mapped[int | None] = mapped_column(BigInteger)  # unix seconds, when to renew. None: never expires
     atlassian_token: Mapped[str | None] = mapped_column(Text)  # encrypted
     atlassian_refresh: Mapped[str | None] = mapped_column(Text)  # encrypted
     atlassian_expires_at: Mapped[int | None] = mapped_column(BigInteger)  # unix seconds
@@ -107,6 +109,7 @@ def ensure_columns() -> None:
         with engine.begin() as conn:
             for name, ddl in (("email", "VARCHAR(254) UNIQUE"), ("name", "VARCHAR(80)"),
                               ("password_hash", "VARCHAR(200)"), ("created_at", "TIMESTAMP WITH TIME ZONE"),
+                              ("github_refresh", "TEXT"), ("github_expires_at", "BIGINT"),
                               ("totp_secret", "TEXT"), ("totp_pending", "TEXT"), ("totp_last_step", "BIGINT"),
                               ("session_version", "INTEGER NOT NULL DEFAULT 0")):
                 if name not in columns:
