@@ -1,4 +1,5 @@
 """GitHub and Atlassian: OAuth sign in, listing repositories and projects, and webhook management."""
+import threading
 import time
 import urllib.parse as up
 
@@ -10,6 +11,9 @@ from .db import User
 from .security import seal, unseal
 from .settings import settings
 
+GITHUB_SCOPE = "repo offline_access"  # offline_access asks for a refresh token, and adds no prompt
+GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
+GITHUB_EARLY_SECONDS = 10 * 60  # renew this early, so a token never expires during an agent run, which can take 5 minutes
 ATLASSIAN_SCOPE = "read:jira-work write:jira-work read:jira-user offline_access"
 ATLASSIAN_TOKEN_URL = "https://auth.atlassian.com/oauth/token"
 # pull_request starts an analysis. check_suite says CI finished, so a failing build can raise the label.
@@ -56,14 +60,14 @@ def github_authorize_url(state: str) -> str:
     query = up.urlencode({
         "client_id": settings.github_client_id,
         "redirect_uri": callback_url("github"),
-        "scope": "repo",
+        "scope": GITHUB_SCOPE,
         "state": state,
     })
     return f"https://github.com/login/oauth/authorize?{query}"
 
 
-def github_exchange(code: str) -> tuple[str, dict]:
-    response = _call("POST", "https://github.com/login/oauth/access_token", headers={"Accept": "application/json"}, data={
+def github_exchange(code: str) -> tuple[dict, dict]:
+    response = _call("POST", GITHUB_TOKEN_URL, headers={"Accept": "application/json"}, data={
         "client_id": settings.github_client_id,
         "client_secret": settings.github_client_secret,
         "code": code,
@@ -73,7 +77,61 @@ def github_exchange(code: str) -> tuple[str, dict]:
     if "access_token" not in data:
         raise HTTPException(400, data.get("error_description", "GitHub sign in failed"))
     me = _ok(_call("GET", "https://api.github.com/user", headers=_gh(data["access_token"])), "GitHub profile")
-    return data["access_token"], me
+    return data, me
+
+
+def store_github_tokens(user: User, tokens: dict) -> None:
+    """A token with no expires_in does not expire, so it has no refresh token either."""
+    user.github_token = seal(tokens["access_token"])
+    user.github_refresh = seal(tokens["refresh_token"]) if tokens.get("refresh_token") else None
+    expires_in = tokens.get("expires_in")
+    user.github_expires_at = int(time.time()) + int(expires_in) - GITHUB_EARLY_SECONDS if expires_in else None
+
+
+def _github_token_is_fresh(user: User) -> bool:
+    return not user.github_expires_at or time.time() < user.github_expires_at
+
+
+_github_refresh_lock = threading.Lock()
+
+
+def github_access_token(db: Session, user: User) -> str:
+    """The account's GitHub token, renewed first if it is about to expire. A refresh token works only once, so only
+    one request may renew at a time: the lock covers this server and the row lock covers any other server."""
+    if _github_token_is_fresh(user):
+        return unseal(user.github_token)
+    with _github_refresh_lock:
+        db.refresh(user, with_for_update=True)
+        if _github_token_is_fresh(user):  # another request renewed it while this one waited
+            token = unseal(user.github_token)
+            db.commit()
+            return token
+        if not user.github_refresh:
+            db.rollback()
+            raise HTTPException(409, "GitHub sign in expired. Link your account again")
+        refresh_token = unseal(user.github_refresh)
+        try:
+            response = _call("POST", GITHUB_TOKEN_URL, headers={"Accept": "application/json"}, data={
+                "client_id": settings.github_client_id,
+                "client_secret": settings.github_client_secret,
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+            })
+            try:
+                answer = response.json()
+            except ValueError:
+                answer = {}
+            if isinstance(answer, dict) and answer.get("error"):  # for example bad_refresh_token, after six months unused
+                raise HTTPException(409, "GitHub sign in expired. Link your account again")
+            tokens = _ok(response, "Refreshing GitHub sign in")
+            if not isinstance(tokens, dict) or "access_token" not in tokens:
+                raise HTTPException(502, "Refreshing GitHub sign in failed. The answer could not be read")
+        except HTTPException:
+            db.rollback()
+            raise
+        store_github_tokens(user, tokens)
+        db.commit()  # the old tokens stopped working the moment GitHub answered, so save the new ones straight away
+        return tokens["access_token"]
 
 
 def list_repos(token: str) -> list[str]:

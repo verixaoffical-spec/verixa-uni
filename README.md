@@ -12,7 +12,8 @@ the Deliverable 1 app.
 FastAPI serves both the API and the built React frontend, so there is one server and one address.
 Data is stored in the shared Neon PostgreSQL database.
 
-**To run the project, follow [START.md](START.md).** For everything changed in the `verixa-uni-v2`
+**New to the project? Read [README_SIMPLE.md](README_SIMPLE.md).** **To run it, follow
+[START.md](START.md).** For everything changed in the `verixa-uni-v2`
 branch, and why, see [section 12](#12-what-changed-in-verixa-uni-v2). For the latest additions (forgot
 password, email, and live agent updates over a WebSocket), see [section 13](#13-updates-on-7-november-2026).
 
@@ -73,7 +74,6 @@ analysis result to show. It is Farheen's task and it is implemented, so it is in
 | Task | Why |
 |---|---|
 | **T-034** Yes/no risk questions + majority vote of 3 | Not implemented anywhere in multi-agents. The agent uses deterministic rules plus a single model call for the explanation only. Still TODO |
-| **T-036** PR and risk dashboard screen | Arisha's task, and no such screen exists in official_ui-main. The Risk Analysis screen in this folder is new integration glue, not T-036 delivered — see section 11 |
 | Test & Execution Agent (`test_agent/`, `manager_agent/test_phase.py`) | Still in its testing phase, and Deliverable 3 scope. `tests/test_analysis_integration.py` asserts it has not crept in |
 | Test run, evidence, Jira filing, drafted tests | Deliverables 3 to 5, not started |
 
@@ -548,7 +548,8 @@ Build the frontend first (the end-to-end tests run the real app). Then name the 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest tests.test_validators tests.test_library tests.test_accounts `
     tests.test_crud tests.test_twofactor tests.test_risk_rules tests.test_analysis_integration `
-    tests.test_qa_security tests.test_risk_eval tests.test_password_reset tests.test_live
+    tests.test_qa_security tests.test_risk_eval tests.test_github_refresh tests.test_legal_pages `
+    tests.test_password_reset tests.test_live tests.test_ci_check tests.test_agent_fixes tests.test_manager_matching
 ```
 
 To test by hand with ready-made accounts and files, follow `samples/test-data/README.md`.
@@ -568,8 +569,13 @@ branch — never the production branch, where the agent tables live.
 | **`tests/test_risk_rules.py`** | The rule engine: size, defect and sensitivity points, the minimum labels, new-module scoring, the factor trace, edge cases |
 | **`tests/test_analysis_integration.py`** | Webhook → agent → database → API, the signature and action guards, auth on every route, repeat deliveries, cleanup on disconnect and account delete, and that the Test Agent has not crept in |
 | **`tests/test_risk_eval.py`** | T-037: 30 labelled pull requests scored by the real rules. Run `python -m tests.test_risk_eval` to see the score |
+| `tests/test_github_refresh.py` | The GitHub token's 8 hour expiry: the clock moves forward, tokens renew on every path, and failed renewals are safe |
+| `tests/test_legal_pages.py` | The Privacy and Terms pages, and two claims the policy makes about stored data |
 | **`tests/test_password_reset.py`** | Forgot password: links, expiry, reuse, rate limits, sessions ending, and the email sender |
 | **`tests/test_live.py`** | The live WebSocket: message wording, sign-in and same-site checks, only your own repository, a real Manager retry |
+| **`tests/test_ci_check.py`** | The CI result check: reading GitHub's checks, the High floor, and CI finishing later |
+| **`tests/test_agent_fixes.py`** | Dangerous removals, secrets in code, no invented code tests, and the model's concern |
+| **`tests/test_manager_matching.py`** | The Manager accepts correct answers about removed checks, and still rejects unrelated ones |
 | **`tests/test_qa_security.py`** | Garbage input, stored script payloads, malformed requests, cross-site requests, path tricks, security headers, unreadable or revoked tokens, worst-case upload speed, and separation between accounts |
 
 `test_analysis_integration.py` fakes GitHub at the network boundary only — `fetch_pr` and the two
@@ -611,8 +617,9 @@ The test plan for the Manager and Analysis Agents, and how to trace a run with t
 
 ### Implemented and tested
 
-* **263 tests pass**, including 24 rule-engine tests, 26 integration tests and 70 security
+* **371 tests pass**, including 24 rule-engine tests, 26 integration tests and 70 security
   regression tests (SQLite).
+* **Private and public repositories both tested for real.** See "Added on 6 and 7 November" in section 12.
 * `npm run typecheck` and `npm run build` are clean.
 * The server boots, serves the landing page, login and dashboard, protects the new routes with
   401, rejects unsigned webhook deliveries with 401, and returns the analysis feed.
@@ -661,9 +668,9 @@ tasks yet.
 
 * **T-034** yes/no risk questions with a majority vote of 3 — not implemented. The agent currently
   makes one model call for the explanation only, and the label never depends on a vote.
-* **T-036** the PR and risk dashboard screen is Arisha's task and stays TODO. The Risk Analysis
-  screen here is the integration needed to show the agent's output at all; it is not a delivery of
-  T-036 and should be reviewed against whatever Arisha designs.
+* **T-036** the PR and risk dashboard screen is done. It is the Risk Analysis screen,
+  `frontend/src/dashboard/RiskView.tsx` and `risk.css`: each pull request's label, score and state, the reasons
+  for the label, the agent's reasoning and suggested test areas.
 * **T-037** a first eval set is in `tests/test_risk_eval.py`: 30 labelled cases, 26 correct (87%), with
   the 4 misses listed as known gaps. The labels and changes were written for this set by someone who
   had read the rules, so they are a draft: the team should review them and add real pull requests
@@ -714,7 +721,7 @@ first, then fixed, and the tests were run again after each batch of fixes.
 
 | Check | Result |
 |---|---|
-| Automated tests | 263 of 263 pass. 190 existed before, and 73 are new |
+| Automated tests | 371 of 371 pass, on 7 November |
 | Browser checks in real Chromium, against a local copy | 73 of 73 pass, with no alert, script error or blocked page resource |
 | `scripts/check_database.py` on Neon | Passes, and the agent tables are unchanged |
 | `scripts/live_check.py` on Neon, with the real agent | 20 of 20 pass |
@@ -768,6 +775,33 @@ The browser checks were a temporary script and are not in this repository.
 | With no GitHub token, the agent sent an empty `Bearer` header, which GitHub refuses | The header is left out, so public repositories can be read | `agents/github_client.py` |
 | Other small gaps: `/docs` public on https, a request with no size could skip the size limit, a trailing slash in `PUBLIC_URL`, `agent_available` always true, a long GitHub name, a reply from GitHub that is not JSON | Each one is handled | `backend/main.py`, `settings.py`, `analysis_api.py`, `auth.py`, `integrations.py` |
 
+### Added on 6 and 7 November
+
+| Change | What it does | How it was checked |
+|---|---|---|
+| **GitHub token renewal** | GitHub tokens last 8 hours, which was why **Link again** kept appearing. Verixa now saves the refresh token and renews the token itself, 10 minutes early | 22 tests that move the clock forward. On real GitHub, two forced renewals in a row, with GitHub accepting each new token and the private repository still listed |
+| **Privacy Policy and Terms of Service** | New pages at `/privacy` and `/terms`, written from what the code stores. The footer links now work | 4 tests and browser checks on desktop and phone. Not reviewed by a lawyer |
+| **Product video** | Risk scoring moved from "coming next" to a real chapter: a mock-up of opening a pull request on GitHub, then the real Risk Analysis screen with sample data. The cursor is smoother. Now 1:55 | Frames reviewed, and the chapter played in Edge |
+| **T-036** | The Risk Analysis screen is recorded as delivered | Decided by the team |
+
+**Tested on real repositories**
+
+| Repository | Result |
+|---|---|
+| `verixaoffical-spec/Shoplite`, public, connected by the owner | Pull requests scored automatically through the webhook |
+| A private test repository, connected by the owner | The webhook was verified. Pull request #2, opened by the collaborator `Arisha004`, was scored automatically: Low, score 2, with the real model |
+
+This is one pull request on the private repository, and it changed 1 file. The result appears in the account that connected
+the repository, not in the collaborator's own Verixa account. A collaborator without admin access cannot connect a repository,
+because `list_repos` leaves it out and GitHub refuses the webhook. That part comes from the code, and was not tried on GitHub.
+
+**Still open**
+
+* An account linked before the renewal fix has no refresh token until it links once more. `Arisha004` still needs this.
+* The token has not yet been left for a real 8 hours. The renewal was forced by marking it as expired.
+* An expired Atlassian refresh token answers 403, which shows an error instead of **Link again**.
+* When GitHub refuses a token, the Risk Analysis row says the Manager rejected the output, with no **Link again** button.
+
 ### Behaviour changes to know about
 
 * Logging out signs the account out on **all** devices.
@@ -777,12 +811,17 @@ The browser checks were a temporary script and are not in this repository.
 * `SECRET_KEY` and `WEBHOOK_SECRET` must be at least 16 characters.
 * `/docs` only exists when `PUBLIC_URL` is not https.
 * Test Library saves are limited to 20 a minute per account, with at most 50 files in a request.
+* GitHub tokens last 8 hours, so Verixa now saves the refresh token and renews them itself, 10 minutes early. This adds
+  `github_refresh` and `github_expires_at` to `users`, added automatically at startup. An account linked before this
+  change must press **Link again** once. Everyone sharing a database must run this code.
 
 ### New files
 
 | File | What it is |
 |---|---|
 | `START.md` | Step by step instructions to run the project and show it to mentors |
+| `tests/test_github_refresh.py` | 22 tests that move the clock past the GitHub token's 8 hours |
+| `frontend/public/privacy.html`, `terms.html`, `assets/legal.css`, `tests/test_legal_pages.py` | The Privacy Policy and Terms of Service pages, and their tests |
 | `tests/test_qa_security.py` | 70 regression tests for the bugs above |
 | `tests/test_risk_eval.py` | T-037: 30 labelled pull requests, 87% correct, with the 4 misses recorded |
 | `scripts/seed_demo.py` | Demo accounts on a local SQLite file. It refuses any other database |

@@ -358,7 +358,7 @@ class GitHubTests(AppTestCase):
         client = client or self.client
         state = up.parse_qs(up.urlsplit(client.get("/auth/github").headers["location"]).query)["state"][0]
         me = {"id": 4242, "login": "ada-gh", "name": "Ada"}
-        with mock.patch("backend.auth.github_exchange", return_value=("gh-token", me)):
+        with mock.patch("backend.auth.github_exchange", return_value=({"access_token": "gh-token"}, me)):
             return client.get(f"/auth/github/callback?code=x&state={state}")
 
     def test_github_sign_in_asks_for_the_code(self):
