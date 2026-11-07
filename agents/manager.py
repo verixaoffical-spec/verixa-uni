@@ -31,11 +31,32 @@ DISMISSALS = re.compile(
     r"|\b(?:completely|totally|perfectly|entirely)\s+safe\b|\bsafe\s+to\s+(?:merge|skip|ignore)\b"
     r"|\bignor(?:e|ing)\s+(?:the\s+|all\s+|any\s+|previous\s+)*(?:checks?|rules?|instructions?|risk)\b", re.I)
 MIN_SHARED_WORDS = 2
+# Test areas about code, which cannot be right when no code was shown (an image, a moved file, an empty commit).
+# Found by scripts/agent_eval_check.py: a moved file got tests for "date helper functions" nobody had seen.
+# Saying a moved module still exports its functions is fine; claiming what they return or throw is not.
+CODE_TALK = re.compile(r"\b(?:returns?|returning|throws?|pars(?:e|es|ing)|formats? (?:a|the)|endpoints?|routes?|"
+                       r"(?:GET|POST|PUT|PATCH|DELETE)\s+/)\b", re.I)
 
 
 def _words(text: str) -> set[str]:
     found = re.findall(r"[a-z][a-z0-9_]{3,}", re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text).lower())
     return {w[:-1] if w.endswith("s") and not w.endswith("ss") else w for w in found} - GENERIC_WORDS
+
+
+def _shared(answer: set[str], diff: set[str]) -> set[str]:
+    """Words of the answer that come from the diff. A longer word counts when it contains a diff word or the other
+    way round, so "unauthenticated" matches isAuthenticated and "displayname" matches displayName. Without this,
+    correct answers about a removed check were rejected three times (found by scripts/agent_eval_check.py, E5)."""
+    found = answer & diff
+    for word in answer - found:
+        if any(len(min(word, other, key=len)) >= 5 and (other in word or word in other) for other in diff):
+            found.add(word)
+    return found
+
+
+def _numbers(text: str) -> set[str]:
+    """Status codes and similar, such as 401, which a test area often names."""
+    return set(re.findall(r"\b\d{3}\b", text))
 
 
 def _changed_files(diff: str) -> list[str]:
@@ -52,14 +73,14 @@ def about_this_change(answer: str, diff: str) -> bool:
     lowered = answer.lower()
     if any(name.rsplit("/", 1)[-1].lower() in lowered for name in _changed_files(diff)):
         return True
-    return len(_words(answer) & _words(diff)) >= MIN_SHARED_WORDS
+    return len(_shared(_words(answer), _words(diff))) >= MIN_SHARED_WORDS
 
 
 def areas_about_this_change(areas: list[str], diff: str) -> bool:
     """At least half must use a word from the changed code. Not all, because a good edge case
     ("a declined card leaves no order behind") can rightly name things the diff does not."""
-    words = _words(diff)
-    return not words or sum(1 for area in areas if _words(area) & words) * 2 >= len(areas)
+    words, numbers = _words(diff), _numbers(diff)
+    return not words or sum(1 for area in areas if _shared(_words(area), words) or _numbers(area) & numbers) * 2 >= len(areas)
 
 
 def contradicts_label(reasoning: str, label: str) -> bool:
@@ -94,9 +115,20 @@ def validate(pr_id: str) -> tuple[dict | None, list[str]]:
     diff = st["facts"].get("diff_summary", "")
     if not errs and not about_this_change(reasoning, diff):
         errs.append("reasoning does not mention the changed code. Name the changed files or what changed in them.")
-    if not errs and not areas_about_this_change(areas, diff):
+    # With no code shown there is nothing to compare test areas with, so CODE_TALK below guards them instead
+    if not errs and st["facts"].get("has_code", True) and not areas_about_this_change(areas, diff):
         errs.append("suggested_test_areas are not about this change. Base them on the changed code.")
-    if not errs and DISMISSALS.search(" ".join([reasoning, *areas])):
+    concern = data.get("concern")
+    if concern is None or (isinstance(concern, str) and concern.strip().lower() in ("", "none", "n/a", "no concern")):
+        data["concern"] = ""
+    elif not isinstance(concern, str) or len(concern) > 400:
+        errs.append("concern must be empty or one sentence.")
+    elif not errs and not about_this_change(concern, diff):
+        errs.append("concern must name the changed file or line that shows the label may be wrong.")
+    if not errs and not st["facts"].get("has_code", True) and CODE_TALK.search(" ".join(areas)):
+        errs.append("no code changed in this pull request, so do not write tests about functions, return values or routes. "
+                    "Base them on the file names and what this kind of change can break.")
+    if not errs and DISMISSALS.search(" ".join([reasoning, *areas, data.get("concern") or ""])):
         errs.append("do not call the change safe or say it needs no testing. Explain the risk and what to test.")
     return (None if errs else data), errs
 
@@ -120,12 +152,15 @@ class AnalysisManager(BaseAgent):
             if not st.get("facts"):                              # PR could not even be read, retrying is pointless
                 break
             st["feedback"] = "; ".join(errs)
+            if n < MAX_ATTEMPTS:
+                trace("manager.retry", next_attempt=n + 1, of=MAX_ATTEMPTS)
         facts = st.get("facts") or {}
         if data:
             st["result"] = {"pr_id": pr_id, "status": "approved", "attempts": n, "errors": [],
                             "analysis": {"pr_id": pr_id, "risk_label": facts["risk_label"], "score": facts["score"],
                                          "risk_factors": facts["risk_factors"], "reasoning": data["reasoning"],
-                                         "suggested_test_areas": data["suggested_test_areas"], "model": st["model"]}}
+                                         "suggested_test_areas": data["suggested_test_areas"], "model": st["model"],
+                                         "concern": data.get("concern") or ""}}
         else:
             st["result"] = {"pr_id": pr_id, "status": "needs_human_review", "attempts": n, "errors": errs,
                             "analysis": None, "risk_label": facts.get("risk_label"),

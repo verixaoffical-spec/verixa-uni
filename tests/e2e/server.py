@@ -16,8 +16,9 @@ NAME = "verixa-e2e-live" if LIVE else "verixa-e2e"
 PORT = 8012 if LIVE else 8011
 DB = Path(tempfile.gettempdir()) / f"{NAME}.db"
 TRACE = Path(tempfile.gettempdir()) / f"{NAME}-trace.jsonl"
+MAIL = Path(tempfile.gettempdir()) / f"{NAME}-mail.jsonl"  # the test inbox: every email the app sends, one per line
 
-for path in (DB, TRACE):
+for path in (DB, TRACE, MAIL):
     path.unlink(missing_ok=True)
 os.environ.update({
     "DATABASE_URL": "sqlite:///" + str(DB).replace("\\", "/"),
@@ -26,6 +27,7 @@ os.environ.update({
     "WEBHOOK_SECRET": "e2e-only-webhook-secret-0123456789",
     "AGENT_TRACE_FILE": str(TRACE),
     "AGENT_TRACE_CONSOLE": "0",
+    "AGENT_CI_CHECK": "0",  # GitHub is scripted here, and the scripts have no CI
 })
 if not LIVE:
     os.environ.update({"AGENT_MODEL_TIMEOUT": "1", "AGENT_RUN_TIMEOUT": "60", "ANALYSIS_MODELS": "fake/one,fake/two"})
@@ -157,8 +159,20 @@ def script_github_and_model() -> None:
         writer.model = ScriptedModel(which=min(index, 1))
 
 
+def capture_email() -> None:
+    """No mail server in the tests. Emails go to a file the tests read, the way a person reads an inbox."""
+    from backend import password_reset
+
+    def send_email(to: str, subject: str, text: str) -> None:
+        with MAIL.open("a", encoding="utf-8") as inbox:
+            inbox.write(json.dumps({"to": to, "subject": subject, "text": text}) + "\n")
+
+    password_reset.send_email = send_email
+
+
 if __name__ == "__main__":
     seed()
+    capture_email()
     if not LIVE:
         script_github_and_model()
     print(f"e2e server on {PORT}, database {DB}", flush=True)

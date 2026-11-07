@@ -65,6 +65,7 @@ export interface Assessment {
   reasoning: string | null;
   test_areas: string[];
   model_used: string | null;
+  concern: string | null;           // the model's doubt about the rule label. The label itself never changes
   attempts: number;                 // how many tries the Manager needed (retry cap is 3)
   errors: string[];
   created_at: string | null;
@@ -126,6 +127,58 @@ export const api = {
   disableTwoFactor: (password: string, code: string) => request<{ account: Account }>('/auth/2fa/disable', { password, code }),
   newRecoveryCodes: (password: string, code: string) => request<{ recovery_codes: string[] }>('/auth/2fa/recovery-codes', { password, code }),
 };
+
+// One step of an agent run, pushed by the server over the WebSocket at /api/live
+export interface LiveEvent {
+  type: 'agent';
+  repo: string;
+  pr: number;
+  run_id: string | null;
+  at: string;
+  event: string;
+  text: string;
+  level: 'info' | 'ok' | 'warn' | 'error';
+  done: boolean;     // the last message of a run: the result is saved, or it stopped
+  replay?: boolean;  // sent again because the page connected while the run was going on
+}
+
+// Opens the live status connection and keeps it open: it reconnects with a growing delay after a drop,
+// and pings every 25 seconds so tunnels such as ngrok do not close it while the screen is idle.
+export function openLive(onEvent: (event: LiveEvent) => void, onStatus: (connected: boolean) => void): () => void {
+  let socket: WebSocket | null = null;
+  let stopped = false, delay = 1000, retry = 0, ping = 0;
+
+  const connect = () => {
+    socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/live`);
+    socket.onopen = () => {
+      delay = 1000;
+      onStatus(true);
+      ping = window.setInterval(() => { if (socket?.readyState === WebSocket.OPEN) socket.send('ping'); }, 25000);
+    };
+    socket.onmessage = message => {
+      try {
+        const data = JSON.parse(message.data);
+        if (data?.type === 'agent') onEvent(data as LiveEvent);
+      } catch { /* not a message for this page */ }
+    };
+    socket.onclose = event => {
+      clearInterval(ping);
+      onStatus(false);
+      if (stopped) return;
+      if (event.code === 4401) return onSessionLost();  // signed out in another tab
+      retry = window.setTimeout(connect, delay);
+      delay = Math.min(delay * 2, 30000);
+    };
+  };
+
+  connect();
+  return () => {
+    stopped = true;
+    clearTimeout(retry);
+    clearInterval(ping);
+    socket?.close();
+  };
+}
 
 // Forgets saved GitHub and Atlassian sign ins that stopped working, then asks for them again.
 export async function linkAgain(): Promise<void> {

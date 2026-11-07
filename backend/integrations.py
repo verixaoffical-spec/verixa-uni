@@ -12,6 +12,8 @@ from .settings import settings
 
 ATLASSIAN_SCOPE = "read:jira-work write:jira-work read:jira-user offline_access"
 ATLASSIAN_TOKEN_URL = "https://auth.atlassian.com/oauth/token"
+# pull_request starts an analysis. check_suite says CI finished, so a failing build can raise the label.
+WEBHOOK_EVENTS = ["pull_request", "check_suite"]
 
 
 def callback_url(provider: str) -> str:
@@ -91,9 +93,9 @@ def ensure_webhook(token: str, repo: str) -> int:
     hooks = _ok(_call("GET", base, headers=_gh(token)), "Listing webhooks", hint)
     ours = next((h for h in hooks if h.get("config", {}).get("url") == webhook_url()), None)
     if ours:
-        body = {"active": True, "events": ["pull_request"], "config": config}
+        body = {"active": True, "events": WEBHOOK_EVENTS, "config": config}
         return _ok(_call("PATCH", f"{base}/{ours['id']}", headers=_gh(token), json=body), "Updating webhook", hint)["id"]
-    body = {"name": "web", "active": True, "events": ["pull_request"], "config": config}
+    body = {"name": "web", "active": True, "events": WEBHOOK_EVENTS, "config": config}
     return _ok(_call("POST", base, headers=_gh(token), json=body), "Creating webhook", hint)["id"]
 
 
