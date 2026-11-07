@@ -17,15 +17,6 @@ logs/
 .DS_Store
 Thumbs.db
 
-# Project documents and private notes: kept on this computer, never pushed
-*.docx
-*.doc
-*.pdf
-*.pptx
-*.xlsx
-~$*
-tests.txt
-
 # Frontend dependencies and build output (npm install, npm run build)
 node_modules/
 frontend/dist/

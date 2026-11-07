@@ -75,33 +75,3 @@
     .rdetail-in{padding-left:14px;}
     .risk-grid td.ract{width:auto;}
   }
-
-  /* Live agent activity, pushed over the WebSocket while a pull request is being analysed */
-  .live{display:grid;gap:10px;margin-top:18px;}
-  .live-run{padding:12px 14px;border-radius:12px;border:1px solid hsl(249 76% 66%/.35);background:hsl(249 76% 66%/.06);}
-  .live-run.done.ok{border-color:hsl(150 60% 48%/.32);background:hsl(150 60% 48%/.05);}
-  .live-run.done.warn{border-color:rgba(227,164,88,.32);background:rgba(227,164,88,.05);}
-  .live-run.done.error{border-color:rgba(235,118,118,.32);background:rgba(235,118,118,.05);}
-  .live-head{display:flex;align-items:center;gap:10px;font-size:13px;}
-  .live-status{display:inline-flex;align-items:center;gap:7px;color:hsl(var(--muted-foreground));font-size:12.5px;}
-  .live-dot{width:7px;height:7px;border-radius:50%;background:hsl(249 76% 66%);animation:livePulse 1.2s ease-in-out infinite;}
-  .live-close{margin-left:auto;width:24px;height:24px;border:0;border-radius:6px;background:none;color:hsl(var(--muted-foreground));font-size:16px;line-height:1;cursor:pointer;}
-  .live-close:hover{background:var(--soft);color:#fff;}
-  .live-steps{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:5px;}
-  .live-steps li{position:relative;padding-left:18px;font-size:12.5px;color:#c7c9d6;line-height:1.45;}
-  .live-steps li::before{content:"";position:absolute;left:3px;top:6px;width:6px;height:6px;border-radius:50%;background:#6b7280;}
-  .live-steps li.ok::before{background:#5FD199;}
-  .live-steps li.warn{color:var(--warn);}
-  .live-steps li.warn::before{background:var(--warn);}
-  .live-steps li.error{color:var(--bad);}
-  .live-steps li.error::before{background:var(--bad);}
-  .live-steps li.current{color:#fff;}
-  .live-steps li.current::before{background:hsl(249 76% 66%);animation:livePulse 1.2s ease-in-out infinite;}
-  @keyframes livePulse{50%{opacity:.35;}}
-  @media (prefers-reduced-motion:reduce){.live-dot,.live-steps li.current::before{animation:none;}}
-
-  /* The model's doubt about a rule label: shown, never applied */
-  .rconcern{padding:10px 12px;border-radius:10px;border:1px solid rgba(227,164,88,.35);background:rgba(227,164,88,.07);}
-  .rconcern h4{color:var(--warn);}
-  .rconcern p{font-size:13px;color:#e8dcc8;line-height:1.5;}
-  .rconcern .rconcern-note{margin-top:6px;font-size:11.5px;color:hsl(var(--muted-foreground));}

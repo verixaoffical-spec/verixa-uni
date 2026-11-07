@@ -14,8 +14,7 @@ Data is stored in the shared Neon PostgreSQL database.
 
 **New to the project? Read [README_SIMPLE.md](README_SIMPLE.md).** **To run it, follow
 [START.md](START.md).** For everything changed in the `verixa-uni-v2`
-branch, and why, see [section 12](#12-what-changed-in-verixa-uni-v2). For the latest additions (forgot
-password, email, and live agent updates over a WebSocket), see [section 13](#13-updates-on-7-november-2026).
+branch, and why, see [section 12](#12-what-changed-in-verixa-uni-v2).
 
 **Contents**
 
@@ -31,7 +30,6 @@ password, email, and live agent updates over a WebSocket), see [section 13](#13-
 10. [Testing](#10-testing)
 11. [Known limitations and outstanding work](#11-known-limitations-and-outstanding-work)
 12. [What changed in verixa-uni-v2](#12-what-changed-in-verixa-uni-v2)
-13. [Updates on 7 November 2026](#13-updates-on-7-november-2026)
 
 ---
 
@@ -44,7 +42,6 @@ Consolidated in full, as the completed app it already was:
 | Area | What it does |
 |---|---|
 | Accounts | Sign up and log in with email and password, or with GitHub. Name, password and account deletion in settings |
-| Forgot password | A single-use reset link by email, valid for 30 minutes (section 13) |
 | Two-step verification | Authenticator app codes, ten single-use recovery codes, the code step after the password |
 | Sessions | Signed cookie, 14 days, `session_version` so a password change signs out every other session |
 | GitHub and Jira | One sign-in links both. Repositories and Jira projects are listed and connected |
@@ -96,9 +93,6 @@ mid/
     agent_db.py             NEW: the risk_assessments table
     analysis_service.py     NEW: webhook -> agent -> database
     analysis_api.py         NEW: /api/analysis for the dashboard
-    live.py                 NEW: /api/live, the WebSocket that pushes agent steps to the dashboard
-    password_reset.py       NEW: forgot password and reset password
-    mailer.py               NEW: sends email over SMTP, or prints it when SMTP is not set
   agents/                   the Analysis Agent, reused from multi-agents
     risk_rules.py           T-031 / T-033, unchanged
     analysis.py             T-031, the worker        (imports, a token parameter, the prompt fix in section 12)
@@ -107,8 +101,7 @@ mid/
     llm.py  events.py  models.py   shared plumbing, unchanged
     runner.py               drives ADK               (imports + a token parameter)
   frontend/                 React + TypeScript, built with Vite
-    src/dashboard/RiskView.tsx   NEW: the Risk Analysis screen, with the live agent activity panel
-    src/auth/PasswordReset.tsx   NEW: the Forgot password and Choose a new password pages
+    src/dashboard/RiskView.tsx   NEW: the Risk Analysis screen
     src/dashboard/risk.css       NEW: its styles
     src/dashboard/api.ts         + the analysis calls and types
     src/dashboard/Rail.tsx       Pull Requests is now a real screen, not Coming Soon
@@ -290,9 +283,6 @@ straight from `os.environ`.
 | `GITHUB_CLIENT_ID` / `_SECRET` | GitHub sign-in | From the GitHub OAuth App |
 | `ATLASSIAN_CLIENT_ID` / `_SECRET` | Jira | From the Atlassian OAuth 2.0 app |
 | `TOTP_ENCRYPTION_KEY` | two-step | Fernet key for two-step secrets. Never change it once in use |
-| `SMTP_HOST`, `SMTP_PORT` | forgot password | The mail server, for example `smtp.gmail.com` and `587`. Empty: the reset email is printed in the server window instead of sent |
-| `SMTP_USER`, `SMTP_PASSWORD` | forgot password | The sending account and its **app password**, not the normal password. For Gmail: turn on 2-Step Verification, then create one at myaccount.google.com/apppasswords |
-| `MAIL_FROM` | optional | The sender shown in the email, such as `Verixa <verixa.noreply@gmail.com>`. Defaults to `SMTP_USER` |
 | `GROQ_API_KEY` | the explanation | At least one provider key. **The risk label and score need none** |
 | `OPENROUTER_API_KEY` | fallback models | Qwen3 8B and friends |
 | `GEMINI_API_KEY` | last fallback | Leave unset if real repository code must not be sent to Gemini |
@@ -439,11 +429,6 @@ The screen renders only what is stored. A pull request that has not been scored 
 state — Queued, Analysing, Needs review or Failed — never a placeholder label. The list polls every
 four seconds **only while something is actually being scored**, and only while the screen is open.
 
-While the agents work, each step also arrives **live over a WebSocket** (`/api/live`) and shows in an
-activity card per pull request: received, reading the changes, the rule score, the model call, the
-Manager verifying or rejecting the output, the Analysis Agent redoing the work, and the saved result.
-When the run ends the list reloads by itself, so the screen has no Refresh button. See section 13.
-
 **Design note.** `frontend/src/landing/MockDashboard.tsx` is the hardcoded product picture on the
 public landing page. Its visual language — the risk pills, the stat tiles, the pull request table —
 is what `RiskView.tsx` and `risk.css` rebuild against real agent data. The landing mockup itself is
@@ -457,8 +442,7 @@ One shared Neon database, the one the agents already use. Tables are created on 
 nothing is ever altered or dropped.
 
 **The five tables the app owns** — `users`, `recovery_codes`, `projects`, `spec_files`,
-`collections` — are **unchanged**. A sixth app table, `password_resets`, was added for forgot
-password (section 13). Not one agent column was added to them;
+`collections` — are **unchanged**. Not one agent column was added to them;
 `tests/test_analysis_integration.py` asserts this.
 
 **The one table the agent owns** is new in this folder:
@@ -522,15 +506,6 @@ Errors from `/api/analysis/analyse`: **409** no project or no linked GitHub, **5
 not be read, **503** the agent is unavailable (`google-adk` missing), **422** a bad pull request
 number.
 
-### Added on 7 November 2026
-
-| Method | Path | Body | Success | Notes |
-|---|---|---|---|---|
-| POST | `/auth/forgot` | `{"email": "..."}` | 202 | Always the same answer, whether or not the email has an account. Limited to 3 an hour per email and 10 per address |
-| POST | `/auth/reset` | `{"token": "...", "password": "..."}` | 200 | **400** for a bad, used or expired link, **422** for a weak password. Ends every session of the account |
-| GET | `/forgot-password`, `/reset-password` | — | the page | The reset link is `/reset-password#token=...`. The token is after `#`, so it never reaches the server's log |
-| WebSocket | `/api/live` | — | messages | Needs the session cookie and a same-site Origin. Each message is one agent step: `{repo, pr, event, text, level, done}`. Closes with **4401** when signed out |
-
 ### Changed
 
 `POST /webhooks/github` now hands `pull_request` events with action `opened`, `synchronize` or
@@ -548,8 +523,7 @@ Build the frontend first (the end-to-end tests run the real app). Then name the 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest tests.test_validators tests.test_library tests.test_accounts `
     tests.test_crud tests.test_twofactor tests.test_risk_rules tests.test_analysis_integration `
-    tests.test_qa_security tests.test_risk_eval tests.test_github_refresh tests.test_legal_pages `
-    tests.test_password_reset tests.test_live tests.test_ci_check tests.test_agent_fixes tests.test_manager_matching
+    tests.test_qa_security tests.test_risk_eval tests.test_github_refresh tests.test_legal_pages
 ```
 
 To test by hand with ready-made accounts and files, follow `samples/test-data/README.md`.
@@ -571,11 +545,6 @@ branch — never the production branch, where the agent tables live.
 | **`tests/test_risk_eval.py`** | T-037: 30 labelled pull requests scored by the real rules. Run `python -m tests.test_risk_eval` to see the score |
 | `tests/test_github_refresh.py` | The GitHub token's 8 hour expiry: the clock moves forward, tokens renew on every path, and failed renewals are safe |
 | `tests/test_legal_pages.py` | The Privacy and Terms pages, and two claims the policy makes about stored data |
-| **`tests/test_password_reset.py`** | Forgot password: links, expiry, reuse, rate limits, sessions ending, and the email sender |
-| **`tests/test_live.py`** | The live WebSocket: message wording, sign-in and same-site checks, only your own repository, a real Manager retry |
-| **`tests/test_ci_check.py`** | The CI result check: reading GitHub's checks, the High floor, and CI finishing later |
-| **`tests/test_agent_fixes.py`** | Dangerous removals, secrets in code, no invented code tests, and the model's concern |
-| **`tests/test_manager_matching.py`** | The Manager accepts correct answers about removed checks, and still rejects unrelated ones |
 | **`tests/test_qa_security.py`** | Garbage input, stored script payloads, malformed requests, cross-site requests, path tricks, security headers, unreadable or revoked tokens, worst-case upload speed, and separation between accounts |
 
 `test_analysis_integration.py` fakes GitHub at the network boundary only — `fetch_pr` and the two
@@ -842,118 +811,3 @@ because `list_repos` leaves it out and GitHub refuses the webhook. That part com
 
 `.env` holds the passwords and keys and is never committed. Each person keeps their own copy, using
 `.env.example` as the guide. Agent keys and app credentials are all in that one file.
-
----
-
-## 13. Updates on 7 November 2026
-
-### Forgot password
-
-People who forget their password can now reset it themselves.
-
-1. On the login page, **Forgot password?** opens a page that asks for the email.
-2. Verixa emails a link that works **once** and expires after **30 minutes**. Asking again replaces the old link.
-3. The link opens **Choose a new password**. The sign up password rules apply, and the password is typed twice.
-4. Saving it signs the account out everywhere. Two-step verification still asks for its code at the next log in.
-
-Safety built in: the answer is the same whether or not an email has an account, only a SHA-256 hash of
-the link is stored, requests are rate limited, cross-site requests are refused, and the token sits after
-`#` in the link, so it never reaches server or tunnel logs and is removed from the address bar on load.
-
-**Email** is sent with **SMTP** over an encrypted (STARTTLS) connection, through the mail account set in
-`.env` (section 4). We use Gmail with an app password, sending from `verixa.noreply@gmail.com`. If
-`SMTP_HOST` is empty, nothing is sent and the email is printed in the server window instead.
-
-Files: `backend/password_reset.py`, `backend/mailer.py`, `frontend/src/auth/PasswordReset.tsx`, the new
-`password_resets` table in `backend/db.py`, and a **Forgot password?** link in `AuthPage.tsx`. Deleting an
-account also deletes its reset links.
-
-### Live agent updates over a WebSocket
-
-The proposal (section 5.5) and the SRS (section 3.4) plan a WebSocket that pushes live run status to the
-dashboard. It now exists at `/api/live`.
-
-* Every step the Manager and the Analysis Agent write to their trace log becomes one short message, pushed
-  to the dashboards connected to that repository. Nothing new is stored.
-* The Risk Analysis screen shows a card per pull request number while it is analysed, for example
-  "Manager agent rejected the output (attempt 1 of 3)" then "Analysis agent is doing the work again
-  (attempt 2 of 3)". **Analyse now** shows the same steps.
-* A page opened in the middle of a run still gets the steps from the last 10 minutes.
-* Only a signed-in page on this site can connect, and it only receives its own repository's steps.
-* The connection pings every 25 seconds so ngrok does not close it, and reconnects by itself after a drop.
-
-Files: `backend/live.py`, `agents/trace.py` (a listener hook), `agents/manager.py` (a `manager.retry`
-step), and `RiskView.tsx`, `api.ts` and `risk.css` in the dashboard.
-
-### CI result check: catching broken code
-
-A small change can still break the code, for example by removing a function that other files call. Word rules
-cannot see that, but the repository's own CI can. So the Analysis Agent now reads the CI result of the pull
-request's commit from GitHub (GitHub Actions check runs, and commit statuses from older CI).
-
-* **CI failing** raises the label to **High**, with the reason "the build or tests fail on this commit" and the
-  names of the failing checks. This stays rule based, as the SRS requires.
-* **Passing, still running or no CI** never changes the label. It is recorded as one `ci:` line in the factors.
-* CI usually starts at the same moment as the pull request, so the first score often sees it still running.
-  The webhook now also receives GitHub's **`check_suite`** event. When CI finishes, Verixa reads the result
-  again and raises the saved label if it failed, without running the agents again. The label is never lowered.
-* The live panel shows "Analysis agent checked CI" and "CI finished and is failing, so the risk was raised to High".
-* **Existing repositories:** click **Connect** again on Integrations once, so the webhook also subscribes to
-  `check_suite`. Repositories without CI simply show "no checks run on this commit".
-* `AGENT_CI_CHECK=0` turns the CI read off. The tests do, so they never call GitHub.
-
-Files: `agents/github_client.py` (`ci_status`), `agents/risk_rules.py` (`ci_factor` and the High floor),
-`agents/analysis.py`, `backend/analysis_service.py` (`apply_check_suite`), `backend/main.py`,
-`backend/integrations.py` (the webhook events) and `backend/live.py`. Tests: `tests/test_ci_check.py`, 18 of 18 pass.
-
-### Agent evaluation and three fixes
-
-`scripts/agent_eval_check.py` runs the real Manager, Analysis Agent and model on 16 positive, negative and edge-case
-pull requests (GitHub faked) and checks the answers for invented files and code, unsupported claims, wrong labels,
-obeyed injections and leaked secrets. The results, with every answer, are in `AGENT_EVAL_REPORT.md`. It found:
-
-1. **Dangerous removals and secrets scored Low.** New rules in `agents/risk_rules.py` (`risky_removals`): removing a
-   login or permission check or a security setting gives **High**, removing input checks, error handling or test cases
-   gives **Medium**, and a key or password added to the code gives **High**. A check that is only moved does not count.
-2. **Invented code when none was shown.** For images, moved files and empty commits the prompt now says there is no
-   code to describe, and the Manager rejects test areas about return values, errors, parsing or routes.
-3. **The model defended labels it thought were wrong.** It may now add a **concern**, one sentence naming the changed
-   line. The rule label never changes. The concern is stored in a new `risk_assessments.concern` column, added at
-   startup, and shown on the Risk Analysis screen as "The agent questions this label".
-
-It also found a Manager bug: correct answers about a removed login check were rejected, because "unauthenticated" did
-not count as `isAuthenticated`. Fixed in `agents/manager.py`. Tests: `tests/test_agent_fixes.py` (15) and
-`tests/test_manager_matching.py` (3). The labelled set of 30 pull requests still scores 26 of 30.
-
-### Risk Analysis screen
-
-The **Refresh** button was removed. The list reloads by itself when a run ends, and polls while anything is
-being scored. A **Live updates on** chip shows the WebSocket is connected.
-
-### Testing added
-
-| Check | Result |
-|---|---|
-| `tests/test_password_reset.py` | 22 of 22 pass |
-| `tests/test_live.py` | 12 of 12 pass, including a real Manager retry |
-| Existing login, two-step, security and data suites | 160 of 160 pass |
-| Browser tests, `tests/e2e/agents.spec.ts` | Pass, including two new live update tests and a check that another account receives nothing |
-| Forgot password QA in a real browser, `tests/e2e/forgot_password.spec.ts` | 56 of 57 pass. 1 blocked: delivery to a real mailbox, since SMTP was not set during the run |
-
-The forgot password QA covers navigation, email checks, email content, links, password rules, the whole
-journey proved by logging in, security, and read-only database checks. Its full report is
-`FORGOT_PASSWORD_QA_REPORT.md`. To run it again:
-
-```powershell
-cd tests\e2e
-npx playwright test --project=forgot
-node fp_report.mjs
-```
-
-The browser test server writes emails to a test inbox file instead of sending them, and
-`tests/e2e/db_check.py` reads the test database without ever printing a hash or a token.
-
-### Other changes
-
-* `.gitignore` keeps documents (`*.docx`, `*.pdf` and similar), Word's `~$` files and `tests.txt` out of Git.
-* `.env.example` lists the email settings.

@@ -15,7 +15,7 @@ Test Agent lands in Deliverable 3 and needs a real run object, split it then.
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, inspect, text
+from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, inspect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from .db import Project, engine, now
@@ -73,7 +73,6 @@ class RiskAssessment(AgentBase):
     reasoning: Mapped[str | None] = mapped_column(Text)
     test_areas: Mapped[str | None] = mapped_column(Text)        # JSON list
     model_used: Mapped[str | None] = mapped_column(String(120))
-    concern: Mapped[str | None] = mapped_column(Text)            # the model's doubt about the rule label, if any
 
     # Manager bookkeeping (T-035): how many attempts it took, and why it gave up
     attempts: Mapped[int] = mapped_column(default=0)
@@ -84,12 +83,8 @@ class RiskAssessment(AgentBase):
 
 
 def init_agent_db() -> None:
-    """Creates `risk_assessments` if it is not there, and adds columns introduced later. Never drops anything."""
+    """Creates `risk_assessments` if it is not there. Never alters or drops anything."""
     AgentBase.metadata.create_all(engine)
-    columns = {c["name"] for c in inspect(engine).get_columns("risk_assessments")}
-    if "concern" not in columns:  # added 7 November 2026, for the model's doubt about a rule label
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE risk_assessments ADD COLUMN concern TEXT"))
 
 
 def agent_tables() -> list[str]:
@@ -144,7 +139,6 @@ def to_json(row: RiskAssessment) -> dict:
         "reasoning": row.reasoning,
         "test_areas": _load(row.test_areas, []),
         "model_used": row.model_used,
-        "concern": row.concern or None,
         "attempts": row.attempts,
         "errors": _load(row.errors, []),
         "created_at": _iso(row.created_at),

@@ -390,7 +390,6 @@ export default function AuthPage() {
                 <p className="caps" id="capsHint"><svg viewBox="0 0 24 24"><path d="M12 4 4 12h4v6h8v-6h4z" /></svg>Caps Lock is on</p>
               )}
               {errorFor('password')}
-              {!signup && <p className="forgot"><a href="/forgot-password">Forgot password?</a></p>}
               {signup && (
                 <div>
                   <div className="meter" data-score={score} aria-hidden="true"><i></i><i></i><i></i><i></i></div>

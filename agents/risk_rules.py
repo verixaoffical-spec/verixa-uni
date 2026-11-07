@@ -88,74 +88,9 @@ def sensitivity(files: list[dict]) -> dict:
     return {"level": "none", "reasons": []}
 
 
-# Removed lines that protect the app. Deleting one is riskier than adding code, however small the change,
-# so each gives a minimum label. Patterns are matched on the removed ("-") lines of code files only.
-REMOVALS = [
-    ("High", "a login or permission check", re.compile(
-        r"\b(?:is_?authenticated|is_?auth\w*|require_?(?:auth|login|user|admin|role|permission)\w*|login_required|"
-        r"is_?admin|is_?owner|has_?(?:role|permission|access)\w*|check_?(?:auth|permission|access)\w*|can_?(?:access|edit|delete)\w*|"
-        r"authori[sz]e\w*|verify_?(?:token|jwt|session|signature)\w*|jwt\.verify|ensure_?(?:auth|logged)\w*)\b"
-        r"|\bstatus\(\s*40[13]\s*\)|\babort\(\s*40[13]\b|\bHTTP_40[13]|\b(?:raise|throw)\s+\w*(?:Unauthori[sz]ed|Forbidden|PermissionDenied)",
-        re.I)),
-    ("High", "a security setting", re.compile(
-        r"\b(?:csrf\w*|helmet|cors\(|rate_?limit\w*|limiter|secure\s*[:=]\s*true|httponly|samesite|"
-        r"content[-_]security[-_]policy|strict[-_]transport|verify\s*[:=]\s*(?:true|1)|ssl_?verify)\b", re.I)),
-    ("Medium", "input checking", re.compile(
-        r"\b(?:validate\w*|sanitiz\w*|escape\w*|is_?valid\w*|assert\w*|schema\.parse|\.safeParse)\b", re.I)),
-    ("Medium", "error handling", re.compile(r"^\s*(?:try\s*[:{]|catch\b|except\b|\}\s*catch\b|finally\b|raise\b|throw\b)", re.I)),
-]
-TEST_CASE = re.compile(r"^\s*(?:(?:it|test|describe)(?:\.\w+)?\s*\(|def\s+test_|async\s+def\s+test_)")
-
-
-def risky_removals(files: list[dict]) -> list[tuple[str, str]]:
-    """(minimum label, reason) for each kind of protective line this change deletes, at most one per kind."""
-    found: dict[str, tuple[str, str]] = {}
-    for f in files:
-        path, patch = f["filename"], f.get("patch") or ""
-        removed = [line[1:] for line in patch.splitlines() if line.startswith("-") and not line.startswith("---")]
-        added_lines = [line[1:] for line in patch.splitlines() if line.startswith("+") and not line.startswith("+++")]
-        added = " ".join(added_lines)
-        if not removed:
-            continue
-        if is_test_or_doc(path):
-            gone = [line for line in removed if TEST_CASE.search(line)]
-            if gone and len(gone) > len([line for line in added_lines if TEST_CASE.search(line)]):
-                found.setdefault("tests", ("Medium", f"removed {len(gone)} test case(s) in {path}"))
-            continue
-        for label, what, pattern in REMOVALS:
-            for line in removed:
-                m = pattern.search(line)
-                # Moved, not removed: the same check still appears in the added lines
-                if m and m.group(0).strip().lower() not in added.lower():
-                    found.setdefault(what, (label, f"removed {what} in {path}: {line.strip()[:80]}"))
-                    break
-    return list(found.values())
-
-
-def ci_factor(ci: dict | None) -> str | None:
-    """One line for the factor trace about the commit's CI, or None when CI was not checked."""
-    if not ci:
-        return None
-    state = ci.get("state")
-    if state == "failure":
-        return f"ci: failing on this commit - {', '.join(ci.get('failed') or ['a check'])}"
-    if state == "pending":
-        return "ci: still running when scored. A failure later raises the label to High"
-    if state == "success":
-        return f"ci: all {ci.get('passed', 0)} check(s) passed"
-    if state == "none":
-        return "ci: no checks run on this commit"
-    return "ci: could not be read, so a broken build would not show here"
-
-
-def assess(files: list[dict], defects: int, defect_note: str = "", history_known: bool = True, total_files: int | None = None,
-           ci: dict | None = None, secrets_added: int = 0) -> dict:
+def assess(files: list[dict], defects: int, defect_note: str = "", history_known: bool = True, total_files: int | None = None) -> dict:
     """history_known=False: every defect lookup failed, which says nothing about the module's history.
-    total_files: how many files the pull request really has, when GitHub would not list them all.
-    ci: the commit's CI result from github_client.ci_status. A failing build or test run means the change
-    breaks something, whatever it looks like, so it raises the label to High.
-    secrets_added: values that look like a key or password in the added lines (agents/redact.py). A secret
-    written into the code leaks to everyone who can read the repository, so it raises the label to High."""
+    total_files: how many files the pull request really has, when GitHub would not list them all."""
     lines = sum(f["additions"] + f["deletions"] for f in files)
     size = size_points(len(files), lines)
     d_pts = defect_points(defects)
@@ -171,13 +106,6 @@ def assess(files: list[dict], defects: int, defect_note: str = "", history_known
         floors.append(("Medium", "user, data or config code is touched"))
     if size >= 6:
         floors.append(("High", "very large change (10+ files and 500+ lines)"))
-    if ci and ci.get("state") == "failure":
-        floors.append(("High", "the build or tests fail on this commit"))
-    removals = risky_removals(files)
-    for minimum, why in removals:
-        floors.append((minimum, why))
-    if secrets_added:
-        floors.append(("High", "a secret is written into the code"))
     label, reason = base, None
     for fl, why in floors:
         if RANK[fl] > RANK[label]:
@@ -196,12 +124,6 @@ def assess(files: list[dict], defects: int, defect_note: str = "", history_known
         factors.append(f"defect history: none found{note}")
     factors.append(f"sensitive area: {sens['level']}" + (f" - {'; '.join(sens['reasons'])}" if sens["reasons"] else "")
                    + f" ({s_pts} pts)")
-    for _, why in removals:
-        factors.append(f"removal: {why}")
-    if secrets_added:
-        factors.append(f"secret in code: {secrets_added} value(s) that look like a key or password were added")
-    if line := ci_factor(ci):
-        factors.append(line)
     factors.append(f"score {score} gives {base}" + (f", raised to {label}: {reason}" if reason else ""))
     return {"score": score, "base_label": base, "risk_label": label, "risk_factors": factors,
             "size_points": size, "defect_points": d_pts, "sensitivity": sens["level"],

@@ -66,7 +66,7 @@ export function destination(): string {
   const next = new URLSearchParams(location.search).get('next');
   let target = DASHBOARD;
   if (next && next.length <= 500 && next.startsWith('/') && !next.startsWith('//') && !next.includes('\\')
-      && !/[\u0000-\u001f]/.test(next) && !['/login', '/signup', '/forgot-password', '/reset-password'].includes(next.split(/[?#]/)[0])) {
+      && !/[\u0000-\u001f]/.test(next) && !['/login', '/signup'].includes(next.split(/[?#]/)[0])) {
     target = next;
   }
   const hash = /^#[\w-]{1,40}$/.test(location.hash) ? location.hash : '';

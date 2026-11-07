@@ -16,7 +16,6 @@ Flow
       -> the dashboard reads it from GET /api/analysis/pull-requests
 """
 import asyncio
-import json
 import logging
 import re
 
@@ -167,7 +166,6 @@ def store_result(db: Session, row_id: int, result: dict, facts: dict | None) -> 
     row.reasoning = analysis.get("reasoning")
     row.test_areas = dump(analysis.get("suggested_test_areas") or [])
     row.model_used = (analysis.get("model") or "")[:120] or None
-    row.concern = (analysis.get("concern") or "")[:400] or None  # emptied too, like the explanation
 
     row.attempts = result.get("attempts") or 0
     errors = [mask(error) for error in result.get("errors") or []]  # a provider's error text can quote a key
@@ -315,85 +313,3 @@ async def analyse_now(project: Project, pr_number: int, token: str | None) -> in
             mark_failed(row_id, f"The analysis could not finish: {type(exc).__name__}")
             raise
     return row_id
-
-
-# ---------- CI finishing after the pull request was scored ----------
-
-RANK = {"Low": 0, "Medium": 1, "High": 2}
-CI_RAISE = "raised to High after CI finished: the build or tests fail on this commit"
-
-
-def _ci_rows(repo: str, sha: str) -> list[tuple[int, str, int, str | None]]:
-    """(row id, pr_id, pr number, decrypted token) for every saved assessment of this commit."""
-    found = []
-    with SessionLocal() as db:
-        rows = db.scalars(select(RiskAssessment).where(RiskAssessment.repo == repo, RiskAssessment.head_sha == sha,
-                                                       RiskAssessment.state.in_(("scored", "needs_human_review")))).all()
-        for row in rows:
-            project = db.get(Project, row.project_id)
-            user = db.get(User, project.user_id) if project else None
-            token = None
-            if user and user.github_token:
-                try:
-                    token = github_access_token(db, user)  # renews it first when it is about to expire
-                except Exception:
-                    log.warning("could not read or renew the GitHub token of user %s", user.id)
-            found.append((row.id, f"{repo}#{row.pr_number}", row.pr_number, token))
-    return found
-
-
-def apply_ci(row_id: int, ci: dict) -> dict | None:
-    """Writes a CI result onto a saved row: the ci line of the factor trace, and High when CI fails.
-    The label is only ever raised here, never lowered. Returns what changed, or None if the row is gone."""
-    from agents.risk_rules import ci_factor
-
-    with SessionLocal() as db:
-        row = db.get(RiskAssessment, row_id)
-        if row is None:
-            return None
-        factors = [f for f in _list(row.risk_factors) if not f.startswith("ci:") and f != CI_RAISE]
-        line = ci_factor(ci)
-        at = next((i for i, f in enumerate(factors) if f.startswith("score ")), len(factors))
-        if line:
-            factors.insert(at, line)
-        raised = ci.get("state") == "failure" and RANK.get(row.risk_label or "", -1) < RANK["High"]
-        if raised:
-            row.risk_label = "High"
-            factors.append(CI_RAISE)
-        row.risk_factors = dump(factors)
-        db.commit()
-        return {"risk_label": row.risk_label, "raised": raised}
-
-
-def _list(raw: str | None) -> list:
-    try:
-        value = json.loads(raw) if raw else []
-    except ValueError:
-        return []
-    return value if isinstance(value, list) else []
-
-
-async def apply_check_suite(payload: dict) -> None:
-    """GitHub's check_suite event: CI finished on a commit. CI usually starts at the same moment as the pull
-    request, so the first score often saw it still running. The full result is read again (one suite can pass
-    while another fails) and written onto every saved assessment of that commit. Never raises."""
-    try:
-        from agents.github_client import ci_status
-
-        suite = _dict(payload.get("check_suite"))
-        repo = _text(_dict(payload.get("repository")).get("full_name"), 200)
-        sha = _text(suite.get("head_sha"), 64)
-        if payload.get("action") != "completed" or not repo or not sha or not SHA_RE.fullmatch(sha):
-            return
-        for row_id, pr_id, _, token in await asyncio.to_thread(_ci_rows, repo, sha):
-            try:
-                ci = await asyncio.to_thread(ci_status, repo, sha, token)
-            except Exception as exc:
-                trace("ci.read_failed", pr_id, row_id=row_id, error=str(exc)[:300])
-                continue
-            changed = await asyncio.to_thread(apply_ci, row_id, ci)
-            if changed:
-                trace("ci.updated", pr_id, row_id=row_id, state=ci["state"], failed=ci["failed"],
-                      risk_label=changed["risk_label"], raised=changed["raised"])
-    except Exception:
-        log.exception("could not apply a check_suite event")

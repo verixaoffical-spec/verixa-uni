@@ -9,7 +9,7 @@
  * shows its real state (queued, running, needs review, failed), never a placeholder label.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, api, openLive, type Assessment, type LiveEvent, type RiskFeed, type RiskLabel } from './api';
+import { ApiError, api, type Assessment, type RiskFeed, type RiskLabel } from './api';
 import { icons } from './icons';
 import { Chip, hookLabel, type HookState, type Link } from './connection';
 import { useToast } from './Toast';
@@ -31,60 +31,6 @@ const STATE_TEXT: Record<Assessment['state'], string> = {
   failed: 'Failed',
 };
 const POLL_MS = 4000;
-const LIVE_KEEP_MS = 2 * 60 * 1000;  // a finished run stays on screen this long
-
-// The live messages of one pull request's current run
-interface LiveRun {
-  pr: number;
-  messages: LiveEvent[];
-  done: boolean;
-  finishedAt: number;
-}
-
-function addLive(runs: LiveRun[], event: LiveEvent): LiveRun[] {
-  const current = runs.find(r => r.pr === event.pr);
-  const startsNew = event.event === 'service.delivery' || event.event === 'run.start';
-  // A message after a finished run starts a new one, unless it is a replay of what is already shown
-  if (!current || (current.done && startsNew && !current.messages.some(m => m.at === event.at && m.event === event.event))) {
-    const fresh = { pr: event.pr, messages: [event], done: event.done, finishedAt: event.done ? Date.now() : 0 };
-    return [fresh, ...runs.filter(r => r.pr !== event.pr)];
-  }
-  if (current.messages.some(m => m.at === event.at && m.event === event.event)) return runs;  // already shown
-  const next = { ...current, messages: [...current.messages, event].slice(-30),
-                 done: current.done || event.done, finishedAt: event.done ? Date.now() : current.finishedAt };
-  return runs.map(r => (r === current ? next : r));
-}
-
-function LivePanel({ runs, onClose }: { runs: LiveRun[]; onClose: (pr: number) => void }) {
-  if (!runs.length) return null;
-  return (
-    <div className="live" aria-live="polite">
-      {runs.map(run => {
-        const last = run.messages[run.messages.length - 1];
-        return (
-          <section key={run.pr} className={'live-run' + (run.done ? ' done ' + last.level : '')}
-                   aria-label={`Agents working on pull request ${run.pr}`}>
-            <header className="live-head">
-              <b>PR #{run.pr}</b>
-              <span className="live-status">
-                {!run.done && <i className="live-dot" aria-hidden="true"></i>}
-                {run.done ? (last.level === 'ok' ? 'Finished' : last.level === 'error' ? 'Stopped' : 'Finished, check the result') : 'Agents are analysing'}
-              </span>
-              {run.done && <button className="live-close" onClick={() => onClose(run.pr)} aria-label={`Hide PR #${run.pr}`}>×</button>}
-            </header>
-            <ol className="live-steps">
-              {run.messages.map((m, i) => (
-                <li key={m.at + m.event + i} className={m.level + (!run.done && i === run.messages.length - 1 ? ' current' : '')}>
-                  {m.text}
-                </li>
-              ))}
-            </ol>
-          </section>
-        );
-      })}
-    </div>
-  );
-}
 
 const initials = (who: string | null) =>
   (who || '??').replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toUpperCase() || '??';
@@ -154,14 +100,6 @@ function Detail({ row }: { row: Assessment }) {
             </div>
           )}
 
-          {row.concern && (
-            <div className="rconcern" role="note">
-              <h4>The agent questions this label</h4>
-              <p>{row.concern}</p>
-              <p className="rconcern-note">The label comes from the rules and has not been changed. Check this before relying on it.</p>
-            </div>
-          )}
-
           {!!row.test_areas.length && (
             <div>
               <h4>Suggested test areas</h4>
@@ -221,29 +159,6 @@ export default function RiskView({ hidden, link, hook, onGoConnect }: Props) {
     loaded.current = true;
     load();
   }, [hidden, link, load]);
-
-  // Live status over the WebSocket: each agent step arrives as it happens, for the connected repository
-  const [liveRuns, setLiveRuns] = useState<LiveRun[]>([]);
-  const [liveOn, setLiveOn] = useState(false);
-  const repo = link?.repo;
-  useEffect(() => {
-    if (!repo) return;
-    setLiveRuns([]);
-    return openLive(event => {
-      if (event.repo !== repo) return;
-      setLiveRuns(runs => addLive(runs, event));
-      if (event.done && !event.replay) load();  // the saved result is in the list now
-    }, setLiveOn);
-  }, [repo, load]);
-
-  // Finished runs fade out of the panel after a while
-  useEffect(() => {
-    if (!liveRuns.some(r => r.done)) return;
-    const timer = setInterval(() => {
-      setLiveRuns(runs => runs.filter(r => !r.done || Date.now() - r.finishedAt < LIVE_KEEP_MS));
-    }, 10000);
-    return () => clearInterval(timer);
-  }, [liveRuns]);
 
   // Poll only while something is actually being scored, and only while this screen is visible
   const pending = (feed?.counts.pending ?? 0) > 0;
@@ -312,7 +227,6 @@ export default function RiskView({ hidden, link, hook, onGoConnect }: Props) {
           </p>
           <div className="chips" style={{ marginTop: 14 }}>
             <Chip on={hook === 'ok'}>{hookLabel(hook)}</Chip>
-            <Chip on={liveOn}>{liveOn ? 'Live updates on' : 'Live updates connecting'}</Chip>
             {feed && <Chip on={false}>Jira {link.jiraKey}</Chip>}
             {(counts.needs_review ?? 0) > 0 && <Chip on={false}>{counts.needs_review} need review</Chip>}
             {(counts.failed ?? 0) > 0 && <Chip on={false}>{counts.failed} failed</Chip>}
@@ -344,6 +258,7 @@ export default function RiskView({ hidden, link, hook, onGoConnect }: Props) {
             <button className="btn" onClick={analyse} disabled={busy || !prNumber.trim()}>
               {busy ? 'Analysing…' : 'Analyse now'}
             </button>
+            <button className="btn ghost" onClick={() => load()} disabled={busy}>Refresh</button>
             <span className="hint">
               {busy ? 'The agent is reading the diff and scoring it. This takes a few seconds.'
                     : 'Scores a pull request without waiting for a webhook delivery.'}
@@ -355,8 +270,6 @@ export default function RiskView({ hidden, link, hook, onGoConnect }: Props) {
               Could not reach the Verixa server. The list below may be out of date.
             </div>
           )}
-
-          <LivePanel runs={liveRuns} onClose={pr => setLiveRuns(runs => runs.filter(r => r.pr !== pr))} />
         </div>
 
         {!feed ? (

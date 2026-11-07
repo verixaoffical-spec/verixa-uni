@@ -11,13 +11,6 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://verixa:verixa@localhost:5432/verixa"
     totp_encryption_key: str = ""  # a Fernet key for two-step verification secrets, see .env.example
 
-    # Email for forgot password links. With SMTP_HOST empty, the link is printed in the server console instead.
-    smtp_host: str = ""
-    smtp_port: int = 587
-    smtp_user: str = ""
-    smtp_password: str = ""
-    mail_from: str = ""
-
     github_client_id: str
     github_client_secret: str
     atlassian_client_id: str

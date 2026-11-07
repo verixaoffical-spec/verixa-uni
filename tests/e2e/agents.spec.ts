@@ -163,12 +163,6 @@ test.describe('running the agents from the Analyse now box', () => {
     await analyse(page, 104);
     await expect(page.getByText('#104 scored High')).toBeVisible({ timeout: 20_000 });
     await expect(detailOf(page, 104).getByText('2 manager attempts')).toBeVisible();
-    // The same run, step by step, as the WebSocket pushed it
-    const run = page.locator('.live-run', { hasText: 'PR #104' });
-    await expect(run).toContainText('Manager agent rejected the output (attempt 1 of 3)');
-    await expect(run).toContainText('Analysis agent is doing the work again (attempt 2 of 3)');
-    await expect(run).toContainText('Manager agent verified the output');
-    await expect(run).toContainText('Manager agent approved the result: High risk');
   });
 
   test('AT-21 a model that never answers: the next model takes over', async () => {
@@ -254,7 +248,7 @@ test.describe('pull requests arriving by webhook', () => {
     const { body, headers } = delivery(201, 'c'.repeat(40));
     const response = await page.request.post('/webhooks/github', { data: body, headers: { ...headers, 'x-hub-signature-256': 'sha256=wrong' } });
     expect(response.status()).toBe(401);
-    await openRisk(page);  // the screen has no Refresh button: load it again
+    await page.getByRole('button', { name: 'Refresh' }).click();
     await expect(rowOf(page, 201)).toHaveCount(0);
   });
 
@@ -262,34 +256,8 @@ test.describe('pull requests arriving by webhook', () => {
     const { body, headers } = delivery(202, '00000ca' + 'a'.repeat(33));
     expect((await page.request.post('/webhooks/github', { data: body, headers })).status()).toBe(202);
     await expect.poll(async () => (await feed(page)).items.find((r: { pr_number: number }) => r.pr_number === 202)?.state, { timeout: 20_000 }).toBe('scored');
-    await openRisk(page);  // the screen has no Refresh button: load it again
+    await page.getByRole('button', { name: 'Refresh' }).click();
     await expect(rowOf(page, 202).locator('.rstate')).toHaveText('Scored');
-  });
-
-  test('a delivery shows each agent step live, then the saved row', async () => {
-    await expect(page.locator('.chip', { hasText: 'Live updates on' })).toBeVisible({ timeout: 15_000 });
-    const { body, headers } = delivery(204, '00000cc' + 'a'.repeat(33));
-    expect((await page.request.post('/webhooks/github', { data: body, headers })).status()).toBe(202);
-    const run = page.locator('.live-run', { hasText: 'PR #204' });
-    for (const step of ['New pull request received from GitHub', 'Manager agent started', 'Analysis agent is reading the changes',
-                        'Risk rules scored it High', 'Analysis agent is asking the AI model', 'Manager agent verified the output',
-                        'Manager agent approved the result: High risk', 'Result saved']) {
-      await expect(run).toContainText(step, { timeout: 20_000 });
-    }
-    await expect(run.locator('.live-status')).toHaveText('Finished');
-    // The list refreshes by itself when the run ends, with no click on Refresh
-    await expect(rowOf(page, 204).locator('.rstate')).toHaveText('Scored');
-  });
-
-  test('another account is never sent these live steps', async ({ browser, baseURL }) => {
-    const other = await signIn(browser, OTHER, baseURL!);
-    await openRisk(other.page);
-    await expect(other.page.locator('.chip', { hasText: 'Live updates on' })).toBeVisible({ timeout: 15_000 });
-    const { body, headers } = delivery(205, '00000cd' + 'a'.repeat(33));
-    await page.request.post('/webhooks/github', { data: body, headers });
-    await expect(page.locator('.live-run', { hasText: 'PR #205' })).toContainText('Result saved', { timeout: 20_000 });
-    await expect(other.page.locator('.live-run')).toHaveCount(0);
-    expect(other.problems).toEqual([]);
   });
 
   test('AT-05 the same delivery twice makes one row', async () => {
@@ -299,7 +267,7 @@ test.describe('pull requests arriving by webhook', () => {
     await expect.poll(async () => (await feed(page)).items.filter((r: { pr_number: number; state: string }) => r.pr_number === 203 && r.state === 'scored').length, { timeout: 20_000 }).toBe(1);
     await page.request.post('/webhooks/github', { data: body, headers });
     await page.waitForTimeout(1000);
-    await openRisk(page);  // the screen has no Refresh button: load it again
+    await page.getByRole('button', { name: 'Refresh' }).click();
     await expect(rowOf(page, 203)).toHaveCount(1);
   });
 
@@ -308,7 +276,7 @@ test.describe('pull requests arriving by webhook', () => {
     const { body, headers } = delivery(300, requested);
     await page.request.post('/webhooks/github', { data: body, headers });
     await expect.poll(async () => (await feed(page)).items.find((r: { pr_number: number }) => r.pr_number === 300)?.state, { timeout: 20_000 }).toBe('scored');
-    await openRisk(page);  // the screen has no Refresh button: load it again
+    await page.getByRole('button', { name: 'Refresh' }).click();
     await expect(rowOf(page, 300).locator('code')).toHaveText('d'.repeat(7));
     await expect(rowOf(page, 300)).toHaveCount(1);
   });

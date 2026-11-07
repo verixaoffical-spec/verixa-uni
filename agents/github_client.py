@@ -65,42 +65,6 @@ def fetch_pr(repo: str, number: int, token: str | None = None) -> tuple[dict, li
     return pr.json(), files
 
 
-FAILED = {"failure", "timed_out", "startup_failure"}  # cancelled is left out: a newer push cancels runs, which is not a fault
-PASSED = {"success", "neutral", "skipped"}
-
-
-def ci_status(repo: str, sha: str, token: str | None = None) -> dict:
-    """What the repository's CI says about one commit: GitHub Actions and other apps (check runs) plus
-    older CI that reports commit statuses. Raises on API errors.
-
-    state is "failure" when any finished check failed, "pending" when any is still running, "success"
-    when every one passed, and "none" when nothing runs on the commit."""
-    failed, pending, passed = [], [], 0
-    with httpx.Client(headers=_headers(token), timeout=20) as c:
-        runs = c.get(f"{API}/repos/{repo}/commits/{sha}/check-runs", params={"per_page": 100})
-        runs.raise_for_status()
-        statuses = c.get(f"{API}/repos/{repo}/commits/{sha}/status")
-        statuses.raise_for_status()
-    for run in runs.json().get("check_runs") or []:
-        name = str(run.get("name") or "check")[:80]
-        if run.get("status") != "completed":
-            pending.append(name)
-        elif run.get("conclusion") in FAILED:
-            failed.append(name)
-        elif run.get("conclusion") in PASSED:
-            passed += 1
-    for status in statuses.json().get("statuses") or []:
-        name = str(status.get("context") or "status")[:80]
-        if status.get("state") in ("failure", "error"):
-            failed.append(name)
-        elif status.get("state") == "pending":
-            pending.append(name)
-        elif status.get("state") == "success":
-            passed += 1
-    state = "failure" if failed else "pending" if pending else "success" if passed else "none"
-    return {"state": state, "failed": failed[:5], "pending": pending[:5], "passed": passed}
-
-
 FIX_RE = re.compile(r"\b(fix(es|ed)?|bug|hotfix|patch|regression|defect)\b", re.I)
 
 

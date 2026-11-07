@@ -11,7 +11,7 @@ function loginPages(): Plugin {
     configureServer(server) {
       server.middlewares.use((req, _res, next) => {
         const [path, query] = (req.url ?? '').split('?');
-        if (['/login', '/signup', '/forgot-password', '/reset-password'].includes(path)) req.url = '/auth.html' + (query ? '?' + query : '');
+        if (path === '/login' || path === '/signup') req.url = '/auth.html' + (query ? '?' + query : '');
         next();
       });
     },
@@ -28,7 +28,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': { target: BACKEND, ws: true },  // ws: the live status WebSocket at /api/live
+      '/api': BACKEND,
       '^/auth/': BACKEND,
       '/webhooks': BACKEND,
     },

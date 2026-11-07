@@ -110,7 +110,7 @@ def safe_next(target: str | None, default: str) -> str:
         return default
     if not target.startswith("/") or target.startswith("//") or "\\" in target:
         return default
-    if any(ord(c) < 32 for c in target) or re.split(r"[?#]", target)[0] in ("/login", "/signup", "/forgot-password", "/reset-password"):
+    if any(ord(c) < 32 for c in target) or re.split(r"[?#]", target)[0] in ("/login", "/signup"):
         return default
     return target
 
