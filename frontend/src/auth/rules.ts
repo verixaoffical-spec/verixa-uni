@@ -6,7 +6,10 @@ export type Values = Record<Field, string>;
 
 export const DASHBOARD = '/verixa_prototype.html';
 
-const EMAIL_RE = /^[a-z0-9_%+'-]+(?:\.[a-z0-9_%+'-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2,}|xn--[a-z0-9-]+)$/;
+// Same pattern as backend/accounts.py: the part before @ starts and ends with a letter or digit, domain parts are
+// at most 63 characters, and the ending is 2 to 24 letters.
+const EMAIL_RE = /^(?=[a-z0-9])[a-z0-9_%+'-]+(?:\.[a-z0-9_%+'-]+)*(?<=[a-z0-9])@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{2,24}|xn--[a-z0-9-]{1,59})$/;
+export const NAME_MIN = 2, NAME_MAX = 50, EMAIL_MAX = 254;
 const NAME_RE = /^[\p{L}\p{M}][\p{L}\p{M} '’.\-]*$/u;
 const MIN_DISTINCT = 4;  // aaaaaaa1 and a1a1a1a1 pass every other rule
 const COMMON = new Set(['password', 'password1', 'password12', 'password123', '12345678', '123456789', '1234567890', 'qwerty123',
@@ -23,14 +26,15 @@ export function problem(field: Field, values: Values, mode: Mode): string | null
 
   if (field === 'name') {
     if (!name) return 'Enter your name';
-    if (name.length > 80) return 'Use 80 characters or fewer';
+    if (name.length > NAME_MAX) return `Use ${NAME_MAX} characters or fewer`;
     if (!NAME_RE.test(name)) return 'Use letters, spaces and simple punctuation only';
-    if (name.length < 2) return 'Use at least 2 characters';
+    if (name.length < NAME_MIN) return `Use at least ${NAME_MIN} characters`;
   }
 
   if (field === 'email') {
     if (!email) return 'Enter your email address';
-    if (email.length > 254 || email.split('@')[0].length > 64 || !EMAIL_RE.test(email)) return 'Enter a valid email address, like name@company.com';
+    const at = email.lastIndexOf('@');
+    if (email.length > EMAIL_MAX || email.slice(0, at).length > 64 || email.slice(at + 1).length > 253 || !EMAIL_RE.test(email)) return 'Enter a valid email address, like name@company.com';
   }
 
   if (field === 'password') {
@@ -66,7 +70,7 @@ export function destination(): string {
   const next = new URLSearchParams(location.search).get('next');
   let target = DASHBOARD;
   if (next && next.length <= 500 && next.startsWith('/') && !next.startsWith('//') && !next.includes('\\')
-      && !/[\u0000-\u001f]/.test(next) && !['/login', '/signup', '/forgot-password', '/reset-password'].includes(next.split(/[?#]/)[0])) {
+      && !/[\u0000-\u001f]/.test(next) && !['/login', '/signup', '/forgot-password', '/reset-password', '/verify-email'].includes(next.split(/[?#]/)[0])) {
     target = next;
   }
   const hash = /^#[\w-]{1,40}$/.test(location.hash) ? location.hash : '';

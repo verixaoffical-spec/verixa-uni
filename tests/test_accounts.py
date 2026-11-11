@@ -22,6 +22,30 @@ class EmailTests(unittest.TestCase):
                       "a@b..com", "a" * 65 + "@b.com", "a@" + "b" * 250 + ".com"):
             self.assertIsNotNone(email_problem(normalize_email(email)), email)
 
+    def test_refuses_garbage(self):
+        garbage = [
+            # symbols only, or a symbol at the start or end of the part before @
+            "'''@x.com", "---@x.com", "+++@x.com", "%%%@x.com", "_@x.com", ".a@x.com", "a.@x.com", "-a@x.com", "a-@x.com",
+            # broken domains
+            "a@.com", "a@com.", "a@-x.com", "a@x-.com", "a@x_y.com", "a@x.c0m", "a@x.123", "a@1.2.3.4", "a@[1.2.3.4]",
+            "a@localhost", "a@x.com.", "a@x." + "t" * 25, "a@" + "b" * 64 + ".com",
+            # characters that never belong in an email
+            "<script>@x.com", "a@x.com<script>", "a@x.com\x00", "a\x00@x.com", "a\tb@x.com", "a;b@x.com", "a,b@x.com",
+            "a(b)@x.com", 'a"b@x.com', "a<b@x.com", "a@x.com/path", "a@x.com?q=1", "javascript:alert(1)@x.com",
+            "' or 1=1--", "admin'--@x.com", "a@x.com; drop table users", "😀@x.com", "a@😀.com", "a@b@c.com",
+            # length limits: 64 before @, 253 after it, 254 in total
+            "a" * 65 + "@x.com", "a@" + ("b" * 60 + ".") * 5 + "com",
+        ]
+        for email in garbage:
+            self.assertIsNotNone(email_problem(normalize_email(email)), repr(email))
+
+    def test_accepts_real_addresses_at_the_edges(self):
+        longest_local = "a" * 64 + "@x.com"
+        long_domain = "a@" + ".".join(["b" * 63] * 3) + ".com"  # a 63 character part is the most allowed
+        for email in ("o'brien@x.com", "first.last+tag@x.co.uk", "1@2.com", "a1@b.io", "a@b.c.d.e.f.com",
+                      "user@xn--bcher-kva.ch", "a@x." + "t" * 24, longest_local, long_domain, "a_b%c+d@x.com"):
+            self.assertIsNone(email_problem(normalize_email(email)), email)
+
 
 class NameTests(unittest.TestCase):
     def test_collapses_whitespace(self):
@@ -31,10 +55,21 @@ class NameTests(unittest.TestCase):
         self.assertIsNone(name_problem("Zoë O'Brien-Smith"))
         self.assertIsNone(name_problem("李小龙"))
         self.assertIsNotNone(name_problem(""))
-        self.assertIsNotNone(name_problem("x" * 81))
+        self.assertIsNotNone(name_problem("x" * 51))
         self.assertIsNotNone(name_problem("<script>"))
         self.assertIsNotNone(name_problem("bell\x07"))
         self.assertIsNotNone(name_problem("zero​width"))
+
+    def test_length_from_2_to_50(self):
+        self.assertEqual(name_problem("A"), "Use at least 2 characters")
+        self.assertIsNone(name_problem("Al"))
+        self.assertIsNone(name_problem("A" * 50))
+        self.assertEqual(name_problem("A" * 51), "Use 50 characters or fewer")
+
+    def test_refuses_garbage(self):
+        for name in ("123", "Ada 2", "@@@", "-Ada", "'Ada", ".", "Ada<b>", "Ada; drop table users", "😀", "Ada 😀",
+                     "<img src=x onerror=alert(1)>", "${7*7}", "{{7*7}}", "Ada_Lovelace", "Ada@home"):
+            self.assertIsNotNone(name_problem(normalize_name(name)), repr(name))
 
 
 class PasswordTests(unittest.TestCase):

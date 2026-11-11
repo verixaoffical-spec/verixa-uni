@@ -3,7 +3,7 @@ import AccountMenu from './AccountMenu';
 import type { Account } from './api';
 import { icons } from './icons';
 
-export type View = 'connect' | 'library' | 'security' | 'risk';
+export type View = 'connect' | 'library' | 'security' | 'risk' | 'profile';
 
 interface Props {
   view: View;
@@ -42,7 +42,7 @@ export default function Rail({ view, onView, account, unsavedChanges, onSignedOu
         {item('connect', 'Integrations', icons.integrations)}
       </nav>
       <AccountMenu account={account} unsavedChanges={unsavedChanges} onIntegrations={() => onView('connect')}
-                   onSecurity={() => onView('security')} onSignedOut={onSignedOut} />
+                   onSecurity={() => onView('security')} onProfile={() => onView('profile')} onSignedOut={onSignedOut} />
     </aside>
   );
 }

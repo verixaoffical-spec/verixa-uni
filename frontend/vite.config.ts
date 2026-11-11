@@ -11,7 +11,7 @@ function loginPages(): Plugin {
     configureServer(server) {
       server.middlewares.use((req, _res, next) => {
         const [path, query] = (req.url ?? '').split('?');
-        if (['/login', '/signup', '/forgot-password', '/reset-password'].includes(path)) req.url = '/auth.html' + (query ? '?' + query : '');
+        if (['/login', '/signup', '/forgot-password', '/reset-password', '/verify-email'].includes(path)) req.url = '/auth.html' + (query ? '?' + query : '');
         next();
       });
     },

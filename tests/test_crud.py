@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import unittest
+from datetime import timedelta
 from unittest import mock
 
 import pyotp
@@ -13,9 +14,13 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from backend import api, auth, twofactor
+import re
+
+from backend import api, auth, email_verify, twofactor
 from backend.accounts import hash_password
-from backend.db import Base, Collection, Project, RecoveryCode, SessionLocal, SpecFile, User, engine, init_db
+from backend.db import (
+    Base, Collection, PendingSignup, Project, RecoveryCode, SessionLocal, SpecFile, User, engine, init_db, now,
+)
 from backend.main import app, mark_verified
 from backend.security import seal, seal_totp, unseal
 from backend.settings import settings
@@ -50,9 +55,14 @@ class CrudTestCase(unittest.TestCase):
         Base.metadata.drop_all(engine)
         init_db()
         for t in (auth.login_by_email, auth.login_by_ip, auth.signup_by_ip,
-                  twofactor.code_by_user, twofactor.code_by_ip, twofactor.password_by_user, api.saves_by_user):
+                  twofactor.code_by_user, twofactor.code_by_ip, twofactor.password_by_user, api.saves_by_user,
+                  email_verify.signup_by_email, email_verify.verify_by_ip):
             t._fails.clear()
         self.client = self.new_client()
+        self.mail = []  # every verification email, as (to, text)
+        mailer = mock.patch.object(email_verify, "send_email", lambda to, subject, text: self.mail.append((to, text)))
+        mailer.start()
+        self.addCleanup(mailer.stop)
         # GitHub and Jira are faked. The ping calls the real code that runs when GitHub delivers it.
         self.github = {
             "list_jira_projects": mock.patch("backend.api.list_jira_projects", return_value=JIRA),
@@ -69,12 +79,24 @@ class CrudTestCase(unittest.TestCase):
         self.addCleanup(client.__exit__)
         return client
 
-    def signup(self, email="ada@example.com", name="Ada Lovelace", password=PASSWORD, client=None):
+    def start_signup(self, email="ada@example.com", name="Ada Lovelace", password=PASSWORD, client=None):
+        """Only the form: the account waits for its email to be confirmed."""
         return (client or self.client).post("/auth/signup", json={"name": name, "email": email, "password": password})
+
+    def token_for(self, email):
+        to, text = [m for m in self.mail if m[0] == email.strip().lower()][-1]
+        return re.search(r"/verify-email#token=([\w-]+)", text).group(1)
+
+    def signup(self, email="ada@example.com", name="Ada Lovelace", password=PASSWORD, client=None):
+        """The whole sign up: the form, then the link from the email, opened in the same browser."""
+        res = self.start_signup(email, name, password, client)
+        if res.status_code != 202:
+            return res
+        return (client or self.client).post("/auth/verify-email", json={"token": self.token_for(email)})
 
     def linked_user(self, email="ada@example.com", client=None):
         """Signs up and links GitHub and Atlassian, as the OAuth callbacks would."""
-        self.assertEqual(self.signup(email, client=client).status_code, 201)
+        self.assertEqual(self.signup(email, client=client).status_code, 200)
         with SessionLocal() as db:
             user = db.scalar(select(User).where(User.email == email))
             user.github_token, user.atlassian_token = seal("gh-token"), seal("atl-token")
@@ -98,7 +120,7 @@ class CrudTestCase(unittest.TestCase):
 class AccountTests(CrudTestCase):
     def test_signup_stores_the_account(self):
         res = self.signup("  Ada@Example.COM ", "  Ada   Lovelace ")
-        self.assertEqual(res.status_code, 201, res.text)
+        self.assertEqual(res.status_code, 200, res.text)
         user = row(User, email="ada@example.com")
         self.assertIsNotNone(user)
         self.assertEqual(user.name, "Ada Lovelace")
@@ -164,6 +186,92 @@ class AccountTests(CrudTestCase):
             db.commit()
         self.assertIsNone(self.session()["account"])
         self.assertEqual(self.client.post("/api/library/apply", json={}).status_code, 401)
+
+
+
+class EmailVerificationTests(CrudTestCase):
+    """Sign up only creates the account once the link sent to the email is opened."""
+
+    def test_signup_waits_for_the_email(self):
+        res = self.start_signup("  Ada@Example.COM ", "  Ada   Lovelace ")
+        self.assertEqual(res.status_code, 202, res.text)
+        self.assertEqual(res.json(), {"verify": True, "email": "ada@example.com"})
+        self.assertEqual(count(User), 0)                       # nothing in users yet
+        self.assertIsNone(self.session()["account"])           # and nobody is signed in
+        pending = row(PendingSignup, email="ada@example.com")
+        self.assertEqual(pending.name, "Ada Lovelace")
+        self.assertTrue(pending.password_hash.startswith("scrypt$"))
+        token = self.token_for("ada@example.com")
+        self.assertEqual(pending.token_hash, hashlib.sha256(token.encode()).hexdigest())
+        self.assertNotIn(token, pending.token_hash)
+        self.assertEqual([to for to, _ in self.mail], ["ada@example.com"])
+
+    def test_cannot_log_in_before_verifying(self):
+        self.start_signup()
+        res = self.new_client().post("/auth/login", json={"email": "ada@example.com", "password": PASSWORD})
+        self.assertEqual(res.status_code, 401)
+
+    def test_the_link_creates_the_account_and_signs_in(self):
+        self.start_signup()
+        browser = self.new_client()  # the email can be opened anywhere
+        res = browser.post("/auth/verify-email", json={"token": self.token_for("ada@example.com")})
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["account"]["email"], "ada@example.com")
+        self.assertEqual(count(User), 1)
+        self.assertEqual(count(PendingSignup), 0)
+        self.assertEqual(self.session(browser)["account"]["name"], "Ada Lovelace")
+        login = self.new_client().post("/auth/login", json={"email": "ada@example.com", "password": PASSWORD})
+        self.assertEqual(login.status_code, 200)
+
+    def test_the_link_works_once(self):
+        self.start_signup()
+        token = self.token_for("ada@example.com")
+        self.assertEqual(self.client.post("/auth/verify-email", json={"token": token}).status_code, 200)
+        self.assertEqual(self.new_client().post("/auth/verify-email", json={"token": token}).status_code, 400)
+        self.assertEqual(count(User), 1)
+
+    def test_bad_and_expired_links_create_nothing(self):
+        self.start_signup()
+        for token in ("", "x" * 43, "not a token"):
+            self.assertEqual(self.client.post("/auth/verify-email", json={"token": token}).status_code, 400, token)
+        with SessionLocal() as db:
+            db.scalar(select(PendingSignup)).expires_at = now() - timedelta(minutes=1)
+            db.commit()
+        res = self.client.post("/auth/verify-email", json={"token": self.token_for("ada@example.com")})
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(count(User), 0)
+
+    def test_signing_up_again_replaces_the_link(self):
+        self.start_signup(name="Ada One")
+        old = self.token_for("ada@example.com")
+        self.start_signup(name="Ada Two")
+        self.assertEqual(count(PendingSignup), 1)
+        self.assertEqual(self.client.post("/auth/verify-email", json={"token": old}).status_code, 400)
+        res = self.client.post("/auth/verify-email", json={"token": self.token_for("ada@example.com")})
+        self.assertEqual(res.json()["account"]["name"], "Ada Two")
+
+    def test_an_email_taken_while_waiting_is_refused(self):
+        self.start_signup()
+        token = self.token_for("ada@example.com")
+        with SessionLocal() as db:
+            db.add(User(email="ada@example.com", name="Other", password_hash=hash_password(PASSWORD)))
+            db.commit()
+        self.assertEqual(self.client.post("/auth/verify-email", json={"token": token}).status_code, 409)
+        self.assertEqual(count(User), 1)
+        self.assertEqual(count(PendingSignup), 0)
+
+    def test_one_inbox_gets_at_most_three_emails_an_hour(self):
+        for _ in range(3):
+            self.assertEqual(self.start_signup(client=self.new_client()).status_code, 202)
+        self.assertEqual(self.start_signup(client=self.new_client()).status_code, 429)
+        self.assertEqual(len(self.mail), 3)
+
+    def test_verify_checks_the_origin(self):
+        self.start_signup()
+        res = self.client.post("/auth/verify-email", json={"token": self.token_for("ada@example.com")},
+                               headers={"Origin": "https://evil.example"})
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(count(User), 0)
 
 
 class ConnectTests(CrudTestCase):
@@ -536,7 +644,7 @@ class AccountSettingsTests(CrudTestCase):
         self.assertEqual(other.post("/api/library/apply", json={}).status_code, 401)
         fresh = self.new_client()
         self.assertEqual(fresh.post("/auth/login", json={"email": "ada@example.com", "password": PASSWORD}).status_code, 401)
-        self.assertEqual(self.signup(client=fresh).status_code, 201)  # the email is free again
+        self.assertEqual(self.signup(client=fresh).status_code, 200)  # the email is free again
 
     def test_bad_deletes_keep_the_account(self):
         self.assertEqual(self.client.post("/api/account/delete", json={"password": PASSWORD}).status_code, 401)

@@ -51,7 +51,11 @@ async function visitor(browser: Browser, baseURL: string) {
 async function account(baseURL: string, email = `fp-${unique()}@verixa.dev`, name = NAME): Promise<string> {
   const api = await playwrightRequest.newContext({ baseURL, extraHTTPHeaders: { 'x-forwarded-for': address(172) } });
   const res = await api.post('/auth/signup', { data: { name, email, password: ORIGINAL } });
-  expect(res.status(), await res.text()).toBe(201);
+  expect(res.status(), await res.text()).toBe(202);
+  // The account is only created once the link in the verification email is used
+  const mail = await waitForEmail(email, 1, VERIFY);
+  const verified = await api.post('/auth/verify-email', { data: { token: tokenOf(mail.text) } });
+  expect(verified.status(), await verified.text()).toBe(200);
   await api.dispose();
   return email;
 }
@@ -61,15 +65,19 @@ async function client(baseURL: string): Promise<APIRequestContext> {
   return playwrightRequest.newContext({ baseURL, extraHTTPHeaders: { 'x-forwarded-for': address(192) } });
 }
 
-/** Every email the app sent to this address, oldest first. */
-function inbox(to: string): { to: string; subject: string; text: string }[] {
+const RESET = 'Reset your Verixa password';
+const VERIFY = 'Verify your email for Verixa';
+
+/** The emails of one kind the app sent to this address, oldest first. These tests read the reset emails. */
+function inbox(to: string, subject = RESET): { to: string; subject: string; text: string }[] {
   if (!fs.existsSync(INBOX)) return [];
-  return fs.readFileSync(INBOX, 'utf-8').split('\n').filter(Boolean).map(l => JSON.parse(l)).filter(m => m.to === to);
+  return fs.readFileSync(INBOX, 'utf-8').split('\n').filter(Boolean).map(l => JSON.parse(l))
+    .filter(m => m.to === to && m.subject === subject);
 }
 
-async function waitForEmail(to: string, count = 1) {
-  await expect.poll(() => inbox(to).length, { timeout: 10_000, message: `email to ${to}` }).toBeGreaterThanOrEqual(count);
-  return inbox(to)[count - 1];
+async function waitForEmail(to: string, count = 1, subject = RESET) {
+  await expect.poll(() => inbox(to, subject).length, { timeout: 10_000, message: `email to ${to}` }).toBeGreaterThanOrEqual(count);
+  return inbox(to, subject)[count - 1];
 }
 
 const tokenOf = (text: string) => /#token=([\w-]+)/.exec(text)?.[1] ?? '';

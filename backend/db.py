@@ -62,6 +62,19 @@ class PasswordReset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class PendingSignup(Base):
+    """A sign up waiting for its email to be confirmed. The account is only created in users once the link is opened.
+    The password is already hashed, and only a hash of the link's token is stored."""
+    __tablename__ = "pending_signups"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(254), unique=True)
+    name: Mapped[str] = mapped_column(String(80))
+    password_hash: Mapped[str] = mapped_column(String(200))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class Project(Base):
     """One connected repository and Jira project per user."""
     __tablename__ = "projects"

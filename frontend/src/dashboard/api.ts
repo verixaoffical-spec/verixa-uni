@@ -126,6 +126,10 @@ export const api = {
   enableTwoFactor: (code: string) => request<{ account: Account; recovery_codes: string[] }>('/auth/2fa/enable', { code }),
   disableTwoFactor: (password: string, code: string) => request<{ account: Account }>('/auth/2fa/disable', { password, code }),
   newRecoveryCodes: (password: string, code: string) => request<{ recovery_codes: string[] }>('/auth/2fa/recovery-codes', { password, code }),
+
+  // Profile. Deleting asks for the password again, and a code when two-step verification is on.
+  renameAccount: (name: string) => request<{ account: Account }>('/api/account/name', { name }),
+  deleteAccount: (password: string, code: string) => request<null>('/api/account/delete', { password, code }),
 };
 
 // One step of an agent run, pushed by the server over the WebSocket at /api/live

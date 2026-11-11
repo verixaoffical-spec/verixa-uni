@@ -17,7 +17,8 @@
   /* Icon rail */
   .app{display:grid;grid-template-columns:64px minmax(0,1fr);min-height:100vh;
        background:radial-gradient(ellipse 60% 380px at 40% 0,hsl(var(--accent)/.17),transparent 70%) no-repeat,#050507;}
-  .rail{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;align-items:center;padding:14px 0;background:#000;border-right:1px solid var(--hair);z-index:5;}
+  .rail{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;align-items:center;padding:14px 0;background:#000;border-right:1px solid var(--hair);z-index:20;}
+  /* The rail holds the account menu and the tooltips, so it sits above the sticky action bars (6) and below toasts (30) */
   .logo,.ri{position:relative;display:grid;place-items:center;width:40px;height:40px;border-radius:11px;border:0;background:none;color:#8b8d98;transition:background .15s,color .15s;}
   .logo{margin-bottom:16px;}
   .logo img{width:26px;height:26px;}
@@ -261,7 +262,7 @@
 
   @media(max-width:1080px){.workspace{grid-template-columns:minmax(0,1fr);}.side{position:static;max-height:none;}.card{min-height:0;}}
   @media(max-width:760px){
-    .app{grid-template-columns:minmax(0,1fr);}
+    .app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr;}  /* the top bar keeps its height on short pages */
     .rail{position:static;height:auto;flex-direction:row;padding:8px 12px;border-right:0;border-bottom:1px solid var(--hair);}
     .logo{margin:0 8px 0 0;}
     .rail-nav{flex-direction:row;overflow-x:auto;}
@@ -273,7 +274,7 @@
     .head,.pane{padding-left:18px;padding-right:18px;}
     .sec{grid-template-columns:1fr;padding:18px;gap:12px;}
     .formgrid{grid-template-columns:1fr;}
-    .tabs{overflow-x:auto;}
+    .tabs{flex-wrap:wrap;column-gap:4px;}  /* both tabs stay in sight, instead of one hidden off the edge */
     .tab{white-space:nowrap;padding:10px 8px;}
     .btn{white-space:nowrap;}
     kbd{display:none;}
@@ -294,6 +295,7 @@
   .sec-form input.mono{font:14px 'JetBrains Mono',monospace;letter-spacing:.06em;}
   .sec-form input:focus{outline:none;border-color:hsl(var(--accent));box-shadow:0 0 0 3px hsl(var(--accent)/.2);}
   .sec-form input[aria-invalid="true"]{border-color:rgba(235,118,118,.65);}
+  .sec-form input:disabled{background:rgba(255,255,255,.03);color:hsl(var(--muted-foreground));cursor:not-allowed;}  /* shown, not editable: the email on Profile */
   .sec-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
   .sec-form .sec-actions{margin-top:0;}
   .form-err{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;font-size:12.5px;color:var(--bad);}
@@ -385,6 +387,7 @@
   :root[data-theme="light"] .toast{background:#fff;box-shadow:0 12px 40px -10px rgba(25,25,70,.3);}
   :root[data-theme="light"] .toast button{color:#4B3FC4;}
   :root[data-theme="light"] .sec-form input{background:#fff;color:#0B0B14;}
+  :root[data-theme="light"] .sec-form input:disabled{background:#F4F4F8;color:#6B6D7A;}
   :root[data-theme="light"] .qr{border:1px solid var(--hair);}
   :root[data-theme="light"] .warnbox,:root[data-theme="light"] .acct-warn{color:#7A4E00;}
   :root[data-theme="light"] button.avatar{box-shadow:0 0 0 2px #fff,0 0 0 3px hsl(var(--accent)/.5);}

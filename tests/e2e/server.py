@@ -161,13 +161,14 @@ def script_github_and_model() -> None:
 
 def capture_email() -> None:
     """No mail server in the tests. Emails go to a file the tests read, the way a person reads an inbox."""
-    from backend import password_reset
+    from backend import email_verify, password_reset
 
     def send_email(to: str, subject: str, text: str) -> None:
         with MAIL.open("a", encoding="utf-8") as inbox:
             inbox.write(json.dumps({"to": to, "subject": subject, "text": text}) + "\n")
 
     password_reset.send_email = send_email
+    email_verify.send_email = send_email
 
 
 if __name__ == "__main__":

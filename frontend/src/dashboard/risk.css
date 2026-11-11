@@ -79,6 +79,15 @@
     .rdetail-in{padding-left:14px;}
     .risk-grid td.ract{width:auto;}
   }
+  /* Phones: pull request, risk and state only, so the list and an opened row fit the screen
+     instead of scrolling sideways. The score is still in the opened row's "Why this label". */
+  @media (max-width:560px){
+    table.risk-grid{min-width:0;}
+    .risk-grid td,.rdetail-in{overflow-wrap:anywhere;}  /* a long word or title wraps instead of widening the table */
+    .risk-grid .rpr-title{white-space:normal;}
+    .risk-grid .rscore,.risk-grid .ract{display:none;}
+    .rmeta .chip{max-width:100%;white-space:normal;overflow-wrap:anywhere;}
+  }
 
   /* Live agent activity, pushed over the WebSocket while a pull request is being analysed */
   .live{display:grid;gap:10px;margin-top:18px;}

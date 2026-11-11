@@ -16,7 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from agents.trace import add_listener
 
-from . import analysis_api, api, auth, live, password_reset, profile, twofactor
+from . import analysis_api, api, auth, email_verify, live, password_reset, profile, twofactor
 from .agent_db import init_agent_db
 from .analysis_service import HANDLED_ACTIONS, analyse_pull_request, apply_check_suite
 from .db import Project, SessionLocal, get_db, init_db, now
@@ -102,6 +102,7 @@ app.include_router(auth.router)
 app.include_router(twofactor.router)
 app.include_router(profile.router)
 app.include_router(password_reset.router)
+app.include_router(email_verify.router)
 app.include_router(live.router)
 
 # Pages that depend on who is signed in are never cached, so Back after logging out cannot show them again.
@@ -116,8 +117,9 @@ def auth_page(request: Request, db: Session = Depends(get_db)):
 
 
 @app.get("/reset-password")
+@app.get("/verify-email")
 def reset_page():
-    """Open even when signed in: the link from the email must work whichever account this browser is using."""
+    """Open even when signed in: a link from an email must work whichever account this browser is using."""
     return FileResponse(FRONTEND / "auth.html", headers=NO_STORE)
 
 

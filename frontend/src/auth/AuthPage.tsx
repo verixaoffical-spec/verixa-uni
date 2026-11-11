@@ -5,7 +5,7 @@ import Scene from './Scene';
 import TwoFactorStep from './TwoFactorStep';
 import { urlError } from '../shared/urlError';
 import { send, type Reply } from './api';
-import { destination, hasLetterAndNumber, normEmail, normName, problem, strength,
+import { NAME_MAX, destination, hasLetterAndNumber, normEmail, normName, problem, strength,
          type Field, type Mode, type Values } from './rules';
 
 interface FieldError {
@@ -23,7 +23,7 @@ const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const finePointer = matchMedia('(pointer: fine)').matches;  // on phones, focusing a field opens the keyboard over the form
 
 const modeFromPath = (): Mode => (location.pathname.startsWith('/signup') ? 'signup' : 'login');
-const URL_FLAGS = ['error', 'signed_out', 'expired', 'reauth', 'verify'];  // verify: GitHub sign in needs the code step
+const URL_FLAGS = ['error', 'signed_out', 'expired', 'reauth', 'verify', 'deleted'];  // verify: GitHub sign in needs the code step
 const order = (i: number) => ({ '--i': i }) as CSSProperties;  // staggers the entrance animation
 
 // A message carried in the URL, for example after signing out.
@@ -31,6 +31,7 @@ function bannerFromUrl(): Banner | null {
   const params = new URLSearchParams(location.search);
   const error = params.get('error');
   if (error) return { message: urlError(error), kind: 'error' };
+  if (params.has('deleted')) return { message: 'Your account and all its data have been deleted.', kind: 'info' };
   if (params.has('signed_out')) return { message: 'You have been signed out. See you soon.', kind: 'info' };
   if (params.has('expired')) return { message: 'Your session ended. Log in again to pick up where you left off.', kind: 'info' };
   if (params.has('reauth')) return { message: 'For your security, log in again to change your security settings.', kind: 'info' };
@@ -61,6 +62,7 @@ export default function AuthPage() {
   const [githubBusy, setGithubBusy] = useState(false);
   const [ready, setReady] = useState(false);
   const [switched, setSwitched] = useState(false);  // plays a short animation after switching mode
+  const [sentTo, setSentTo] = useState('');  // after sign up: the email the verification link went to
 
   const touched = useRef(new Set<Field>());  // fields the person has typed in, so empty ones are not flagged too early
   const cardRef = useRef<HTMLElement>(null);
@@ -110,11 +112,11 @@ export default function AuthPage() {
   }, [ready]);
 
   useEffect(() => {
-    document.title = (step === 'code' ? 'Two-step verification' : mode === 'login' ? 'Log in' : 'Sign up') + ' · Verixa';
+    document.title = (sentTo ? 'Check your inbox' : step === 'code' ? 'Two-step verification' : mode === 'login' ? 'Log in' : 'Sign up') + ' · Verixa';
     const onPopState = () => switchMode(modeFromPath(), false);
     addEventListener('popstate', onPopState);
     return () => removeEventListener('popstate', onPopState);
-  }, [mode, step]);
+  }, [mode, step, sentTo]);
 
   // After switching mode or step, smoothly resize the card from its old height and focus the first empty field.
   useLayoutEffect(() => {
@@ -124,8 +126,9 @@ export default function AuthPage() {
     if (!reduced && card.offsetHeight !== before) {
       card.animate([{ height: before + 'px' }, { height: card.offsetHeight + 'px' }], { duration: 380, easing: 'cubic-bezier(.22,1,.36,1)' });
     }
-    focusFirst();
-  }, [mode, step]);
+    if (sentTo) document.getElementById('title')?.focus({ preventScroll: true });
+    else focusFirst();
+  }, [mode, step, sentTo]);
 
   // Count down the lockout one second at a time
   useEffect(() => {
@@ -227,6 +230,16 @@ export default function AuthPage() {
       changeStep('code');
       return;
     }
+    if (res.status === 202 && res.data?.verify) {
+      // The account is only created once the link in the email is opened
+      setSubmit('idle');
+      heightBefore.current = cardRef.current?.offsetHeight ?? 0;
+      setSentTo(res.data.email);
+      scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });  // the card gets shorter, so bring it into view
+      setValues(v => ({ ...v, password: '' }));
+      setSwitched(true);
+      return;
+    }
     if (res.status === 200 || res.status === 201) {
       setSubmit('done');
       setTimeout(() => location.replace(destination()), reduced ? 0 : 500);  // let the check mark register first
@@ -254,6 +267,12 @@ export default function AuthPage() {
     }
 
     setBanner({ message: bannerFor(res), kind: 'error' });
+  }
+
+  function signUpAgain() {
+    heightBefore.current = cardRef.current?.offsetHeight ?? 0;
+    setSentTo('');
+    setBanner(null);
   }
 
   function logInInstead() {
@@ -298,14 +317,19 @@ export default function AuthPage() {
 
       <main className="stage" id="top">
         <section className="glass enter" ref={cardRef} aria-labelledby="title" onPointerMove={onPointerMove}>
-          {step === 'password' && <nav className="seg enter" style={order(2)} role="tablist" aria-label="Choose how to continue" data-mode={mode}>
+          {step === 'password' && !sentTo && <nav className="seg enter" style={order(2)} role="tablist" aria-label="Choose how to continue" data-mode={mode}>
             <a href="/login" role="tab" aria-selected={!signup} onClick={e => onModeLink(e, 'login')}>Log in</a>
             <a href="/signup" role="tab" aria-selected={signup} onClick={e => onModeLink(e, 'signup')}>Sign up</a>
             <span className="seg-lamp" aria-hidden="true"></span>
           </nav>}
 
           <div className="enter" style={order(3)}>
-            {step === 'code' ? (
+            {sentTo ? (
+              <div key="sent" className={swap}>
+                <h1 id="title" tabIndex={-1}>Check your <em>inbox</em></h1>
+                <p className="sub">We sent a link to <b>{sentTo}</b>. Open it within 24 hours and press Verify to create your account. Check your spam folder too.</p>
+              </div>
+            ) : step === 'code' ? (
               <div key="code" className={swap}>
                 <h1 id="title" tabIndex={-1}>Two-step <em>verification</em></h1>
                 <p className="sub">Your password is correct. One more step keeps your account safe.</p>
@@ -330,7 +354,12 @@ export default function AuthPage() {
             </div>
           )}
 
-          {step === 'code' ? (
+          {sentTo ? (
+            <div className={swap}>
+              <p className="switch">Wrong email, or no email after a few minutes? <a href="/signup" onClick={e => { e.preventDefault(); signUpAgain(); }}>Sign up again</a></p>
+              <p className="switch alt">Already verified? <a href="/login" onClick={e => { e.preventDefault(); setSentTo(''); logInInstead(); }}>Log in</a></p>
+            </div>
+          ) : step === 'code' ? (
             <div className={swap}>
               <TwoFactorStep locked={lockedFor > 0} onLocked={setLockedFor}
                              onProblem={res => setBanner({ message: bannerFor(res), kind: 'error' })}
@@ -350,7 +379,7 @@ export default function AuthPage() {
               <div className={'field ' + swap}>
                 <label htmlFor="name">Full name</label>
                 <div className="control">
-                  <input id="name" ref={nameRef} type="text" autoComplete="name" maxLength={80} placeholder="Ada Lovelace"
+                  <input id="name" ref={nameRef} type="text" autoComplete="name" maxLength={NAME_MAX} placeholder="Ada Lovelace"
                          value={values.name} readOnly={busy} aria-invalid={!!errors.name} aria-describedby="nameErr"
                          onChange={e => onChange('name', e.target.value)} onBlur={() => onBlur('name')} />
                 </div>

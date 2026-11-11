@@ -11,12 +11,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .accounts import (
-    Throttle, email_problem, hash_password, name_problem, normalize_email, normalize_name, password_problem,
-    safe_next, verify_password,
+    NAME_MAX, Throttle, email_problem, normalize_email, normalize_name, safe_next, verify_password,
 )
 from .db import User, get_db
 from .integrations import (
@@ -109,41 +107,12 @@ def _too_many(seconds: int) -> JSONResponse:
     return JSONResponse({"detail": error.detail}, status_code=429, headers=error.headers)
 
 
-class SignupIn(BaseModel):
-    name: str = Field("", max_length=500)
-    email: str = Field("", max_length=500)
-    password: str = Field("", max_length=500)
-
-
 class LoginIn(BaseModel):
     email: str = Field("", max_length=500)
     password: str = Field("", max_length=500)
 
 
-@router.post("/signup", status_code=201)
-def signup(body: SignupIn, request: Request, db: Session = Depends(get_db)):
-    _check_origin(request)
-    name, email = normalize_name(body.name), normalize_email(body.email)
-    for field, problem in (("name", name_problem(name)), ("email", email_problem(email)),
-                           ("password", password_problem(body.password, email, name))):
-        if problem:
-            raise _field_error(field, problem)
-    ip = _client_ip(request)
-    if wait := signup_by_ip.retry_after(ip):
-        return _too_many(wait)
-    if db.scalar(select(User.id).where(User.email == email)):
-        signup_by_ip.fail(ip)  # counted too, so nobody can test a long list of emails to see who has an account
-        raise _field_error("email", "An account with this email already exists. Log in instead", 409)
-    user = User(email=email, name=name, password_hash=hash_password(body.password))
-    db.add(user)
-    try:
-        db.commit()
-    except IntegrityError:  # two sign ups with the same email at the same moment
-        db.rollback()
-        raise _field_error("email", "An account with this email already exists. Log in instead", 409)
-    signup_by_ip.fail(ip)
-    _sign_in(request, user)
-    return {"account": account_json(user)}
+# Sign up with email is in email_verify.py: the account is only created after the email is confirmed.
 
 
 @router.post("/login")
@@ -245,7 +214,7 @@ def github_callback(request: Request, code: str | None = None, state: str | None
     owner = db.scalar(select(User).where(User.github_id == me["id"]))
     if current and owner and owner.id != current.id:
         return _fail(request, f"GitHub account {me['login']} is already linked to another Verixa account")
-    user = current or owner or User(github_id=me["id"], name=normalize_name(me.get("name") or me["login"])[:80])
+    user = current or owner or User(github_id=me["id"], name=normalize_name(me.get("name") or me["login"])[:NAME_MAX])
     user.github_id = me["id"]
     user.github_login = me["login"]
     user.github_name = (me.get("name") or "")[:200] or None  # GitHub allows longer names than the column holds

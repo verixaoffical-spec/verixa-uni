@@ -4,6 +4,7 @@ import ConnectView from './ConnectView';
 import LibraryView from './LibraryView';
 import Rail, { type View } from './Rail';
 import RiskView from './RiskView';
+import ProfileView from './ProfileView';
 import SecurityView from './SecurityView';
 import type { HookState, Link } from './connection';
 import { useLibrary } from './useLibrary';
@@ -20,7 +21,7 @@ function leave(url: string) {
 const goLogin = (flag: string) => leave(`/login?${flag}&next=${encodeURIComponent(location.pathname)}${location.hash}`);
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-const VIEWS: View[] = ['connect', 'library', 'security', 'risk'];
+const VIEWS: View[] = ['connect', 'library', 'security', 'risk', 'profile'];
 const viewFromHash = (): View => {
   const wanted = location.hash.slice(1) as View;
   return VIEWS.includes(wanted) ? wanted : 'connect';
@@ -78,9 +79,9 @@ export default function App() {
     await loader.hide();
     if (error) toast(urlError(error));
 
-    // Security settings open whatever is linked. The address is read now: it may have changed while loading.
+    // Security settings and the profile open whatever is linked. The address is read now: it may have changed while loading.
     const wanted = location.hash.slice(1);
-    const open = (next: View) => show(location.hash === '#security' ? 'security' : next);
+    const open = (next: View) => show(location.hash === '#security' ? 'security' : location.hash === '#profile' ? 'profile' : next);
     const p = s.project;
     if (!s.github || !s.atlassian) {
       // Asking for the Test Library or Risk Analysis before linking shows their "connect first" screen
@@ -163,6 +164,9 @@ export default function App() {
                      onOpenLibrary={() => show('library')} />
         <LibraryView hidden={view !== 'library'} link={link} hook={hook} library={library} onGoConnect={() => show('connect')} />
         <RiskView hidden={view !== 'risk'} link={link} hook={hook} onGoConnect={() => show('connect')} />
+        <ProfileView hidden={view !== 'profile'} account={account} onAccount={setAccount}
+                     onDeleted={() => { loader.show('Signing you out'); leave('/login?deleted'); }}
+                     onSignInAgain={() => signOut().then(() => goLogin('reauth'))} />
         <SecurityView hidden={view !== 'security'} onAccount={setAccount} onSignInAgain={() => signOut().then(() => goLogin('reauth'))} />
       </main>
     </div>

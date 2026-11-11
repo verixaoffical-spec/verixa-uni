@@ -183,6 +183,12 @@ export default function PasswordReset() {
             <p className="switch">Did not get it? <a href="/forgot-password" onClick={e => { e.preventDefault(); setView('ask'); }}>Send it again</a></p>
           )}
 
+          {/* An account made with GitHub has no Verixa password and no email here, so no link can ever reach it.
+              The note is always shown, so it never reveals whether an email has an account. */}
+          {(view === 'ask' || view === 'sent') && (
+            <p className="switch alt">Signed up with GitHub? You have no Verixa password to reset. <a href="/auth/github">Continue with GitHub</a></p>
+          )}
+
           {view === 'choose' && !badLink && (
             <form noValidate className="enter" style={{ '--i': 3 } as CSSProperties} onSubmit={choosePassword}>
               <div className="field">

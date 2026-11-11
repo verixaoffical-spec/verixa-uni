@@ -9,6 +9,7 @@ interface Props {
   unsavedChanges: number;
   onIntegrations: () => void;
   onSecurity: () => void;
+  onProfile: () => void;
   onSignedOut: () => void;
 }
 
@@ -16,7 +17,7 @@ const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).map(word => [...word][0]).join('').slice(0, 2).toUpperCase() || 'V';
 
 // The round avatar at the bottom of the rail, and the menu it opens
-export default function AccountMenu({ account, unsavedChanges, onIntegrations, onSecurity, onSignedOut }: Props) {
+export default function AccountMenu({ account, unsavedChanges, onIntegrations, onSecurity, onProfile, onSignedOut }: Props) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -77,6 +78,9 @@ export default function AccountMenu({ account, unsavedChanges, onIntegrations, o
             <small>{account?.email || (account?.github_login ? `@${account.github_login} on GitHub` : '')}</small>
           </div>
           {unsavedChanges > 0 && <p className="acct-warn">You have unsaved Test Library changes. Signing out discards them.</p>}
+          <button className="acct-item" type="button" role="menuitem" onClick={() => { setOpen(false); onProfile(); }}>
+            {icons.user}Profile
+          </button>
           <button className="acct-item" type="button" role="menuitem" onClick={() => { setOpen(false); onIntegrations(); }}>
             {icons.integrations}Integrations
           </button>

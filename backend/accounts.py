@@ -9,14 +9,17 @@ import time
 import unicodedata
 
 EMAIL_MAX = 254
-NAME_MAX = 80
+NAME_MIN = 2
+NAME_MAX = 50
 PASSWORD_MIN = 8
 PASSWORD_MAX = 128
 PASSWORD_MIN_DISTINCT = 4  # aaaaaaa1 and a1a1a1a1 pass every other rule
 
 # Plain ASCII addresses only, so no markup, control characters or look-alike letters can get in. Expects lowercase.
 # A top level domain is letters, or xn-- for an international one.
-EMAIL_RE = re.compile(r"^[a-z0-9_%+'-]+(?:\.[a-z0-9_%+'-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2,}|xn--[a-z0-9-]+)$")
+# The part before @ starts and ends with a letter or digit, so '''@x.com or _@x.com are refused. Each part of the
+# domain is at most 63 characters, and the ending is 2 to 24 letters, or an internationalized xn-- name.
+EMAIL_RE = re.compile(r"^(?=[a-z0-9])[a-z0-9_%+'-]+(?:\.[a-z0-9_%+'-]+)*(?<=[a-z0-9])@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{2,24}|xn--[a-z0-9-]{1,59})$")
 NAME_PUNCTUATION = " '’.-"
 COMMON_PASSWORDS = {
     "password", "password1", "password12", "password123", "12345678", "123456789", "1234567890", "qwerty123",
@@ -39,7 +42,8 @@ def email_problem(email: str) -> str | None:
     """Expects a normalized email."""
     if not email:
         return "Enter your email address"
-    if len(email) > EMAIL_MAX or len(email.split("@")[0]) > 64 or not EMAIL_RE.fullmatch(email):
+    local, _, domain = email.rpartition("@")
+    if len(email) > EMAIL_MAX or len(local) > 64 or len(domain) > 253 or not EMAIL_RE.fullmatch(email):
         return "Enter a valid email address, like name@company.com"
     return None
 
@@ -53,8 +57,8 @@ def name_problem(name: str) -> str | None:
     is_letter = lambda c: unicodedata.category(c)[0] in "LM"
     if not is_letter(name[0]) or not all(is_letter(c) or c in NAME_PUNCTUATION for c in name):
         return "Use letters, spaces and simple punctuation only"
-    if len(name) < 2:
-        return "Use at least 2 characters"
+    if len(name) < NAME_MIN:
+        return f"Use at least {NAME_MIN} characters"
     return None
 
 
