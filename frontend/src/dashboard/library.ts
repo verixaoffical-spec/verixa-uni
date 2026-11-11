@@ -182,9 +182,22 @@ export function addSpecFiles(lib: Library, files: PickedFile[], replacingName?: 
   return { ...lib, specs, rejected };
 }
 
-export function addCollectionFile(lib: Library, files: PickedFile[]): Library {
+// replacing: the person chose Replace file on the current collection. Otherwise a collection already on the page blocks a new one,
+// so nobody swaps theirs out by accident.
+export function addCollectionFile(lib: Library, files: PickedFile[], replacing = false): Library {
   let rejected = lib.rejected;
-  for (const extra of files.slice(1)) rejected = reject(rejected, 'pm', extra.name, ['Only one collection can be added at a time']);
+  const current = lib.collection && !lib.collection.removed ? lib.collection : null;
+  if (current && !replacing) {
+    for (const f of files) {
+      rejected = reject(rejected, 'pm', f.name, [`Only one Postman collection is allowed, and "${current.name}" is already added. ` +
+        'To use this one instead, click Replace file on the current collection, or delete it first']);
+    }
+    return { ...lib, rejected };
+  }
+  for (const extra of files.slice(1)) {
+    rejected = reject(rejected, 'pm', extra.name,
+      [`Only one Postman collection is allowed. "${files[0].name}" was taken, so this one was not added. To use it instead, add it on its own`]);
+  }
   const f = files[0];
   if (!f) return { ...lib, rejected };
 
@@ -206,9 +219,10 @@ export function addCollectionFile(lib: Library, files: PickedFile[]): Library {
   }
 
   if (why.length || !analysis) return { ...lib, rejected: reject(rejected, 'pm', f.name, why) };
+  const extras = new Set(files.slice(1).map(x => x.name));  // refused just now, so their reasons stay on screen
   return {
     ...lib,
-    rejected: rejected.filter(r => r.kind !== 'pm'),
+    rejected: rejected.filter(r => r.kind !== 'pm' || extras.has(r.name)),
     collection: { name: f.name, size: f.size, text: f.text!, removed: false, ...analysis },
   };
 }

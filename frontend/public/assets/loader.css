@@ -89,4 +89,13 @@ html[data-theme="light"] #pre-load{background:radial-gradient(ellipse 50% 40% at
 html[data-theme="light"] #pre-load .loader-caption{color:#0b0b12;}
 html[data-theme="light"] #pre-load .loader-caption small{color:rgba(11,11,18,.5);}
 html[data-theme="light"] #pre-load .loader-bar{background:rgba(11,11,18,.1);}
-html[data-theme="light"] #pre-load .box{box-shadow:rgba(40,40,90,.18) 0 10px 10px 0,inset 0 1px 0 rgba(255,255,255,.6);}
+html[data-theme="light"] #pre-load .box{box-shadow:rgba(40,40,90,.18) 0 10px 10px 0,inset 0 1px 0 rgba(255,255,255,.6);
+  --ring:linear-gradient(0deg,hsl(var(--acc)/.04) 0%,hsl(var(--acc)/.14) 100%);
+  animation-name:pre-load-rings-in,pre-load-ripple-light;}
+/* The dark ripple uses a black shadow, which looks muddy on white, so the light theme has a soft purple one */
+@keyframes pre-load-ripple-light{
+  0%{transform:scale(1);box-shadow:hsl(249 50% 40%/.12) 0 10px 14px 0}
+  50%{transform:scale(1.25);box-shadow:hsl(249 50% 40%/.16) 0 26px 26px 0}
+  100%{transform:scale(1);box-shadow:hsl(249 50% 40%/.12) 0 10px 14px 0}
+}
+html[data-theme="light"] #pre-load .loader-logo img{filter:drop-shadow(0 0 8px hsl(var(--acc)/.45));}

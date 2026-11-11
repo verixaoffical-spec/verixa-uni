@@ -366,6 +366,35 @@ For more detail on any of this, see [README_SIMPLE.md](README_SIMPLE.md) and [AG
 
 New questions get added here as you ask them.
 
+### OTP kyun nahi kiya, 2FA kyun kiya?
+
+**Hamara 2FA bhi OTP hi hai.** OTP matlab "one-time password", ek dafa chalne wala code. Farq sirf yeh hai ke code **kahan se aata hai**:
+
+| | SMS ya email OTP | Authenticator app (TOTP), jo hum ne kiya |
+|---|---|---|
+| Code kahan se | Server SMS ya email bhejta hai | Phone ki app khud banati hai, har 30 second |
+| Kharcha | SMS gateway paid hai | Free |
+| Internet ya signal | Chahiye | Nahi chahiye |
+| Chori ka khatra | SIM swap, ya email hack ho jaye to code chori | Code phone ke andar banta hai, raaste mein nahi jata |
+| Zaroorat | Sirf phone number ya email | Authenticator app install karni parti hai |
+
+**Kyun TOTP chuna:** free hai, zyada mehfooz hai, aur kisi SMS ya email service par depend nahi karta. Jab 2FA bana tha, Verixa koi email bhejta hi nahi tha. Phone kho jaye to 10 recovery codes kaam aate hain.
+
+**Mentor ke liye ek line:** "Hamara 2FA bhi OTP hai, lekin authenticator app wala (TOTP). Yeh free hai, SIM swap aur email hack se mehfooz hai, aur SMS ya email service par depend nahi karta."
+
+### Head SHA kyun use hota hai?
+
+Head SHA PR ki **latest commit ki ID** hai, jaise `e7a4b1d`. PR ek hi rehta hai, lekin har naye push par yeh ID badal jati hai.
+
+1. **Har version ka alag result:** database mein ek row = project + PR number + head SHA (`agent_db.py`). Naya push = nayi row, aur
+   purana result bhi history mein rehta hai.
+2. **Do dafa score nahi:** GitHub kabhi wahi webhook dobara bhej deta hai. Same head SHA ki row pehle se ho to Verixa dobara kaam nahi
+   karta (`claim`, `analysis_service.py`).
+3. **Sahi commit ka result:** agent jab PR parhta hai, us waqt ka head SHA dekha jata hai. Agar beech mein naya push aa gaya, to result
+   naye commit wali row par likha jata hai, purane par nahi.
+4. **CI ka result:** build ya tests ka pass ya fail ek commit ke saath juda hota hai, is liye CI head SHA se dhoonda jata hai, aur
+   `check_suite` bhi isi se sahi row tak pohanchta hai.
+
 ### Token kya hai?
 
 Token ek **digital chaabi** hai, jaise hotel ke room ka card. Us se sirf wahi cheez khulti hai jis ki ijazat mili ho, aur usay band bhi kiya ja sakta hai.

@@ -349,7 +349,7 @@ class LibraryTests(CrudTestCase):
 
     def test_at_most_fifty_specs(self):
         self.connected_user()
-        res = self.apply(specs=[{"name": f"t{i}.spec.ts", "text": spec(str(i))} for i in range(50)])
+        res = self.apply(specs=[{"name": f"t{i}.spec.ts", "text": spec(f"case {i}")} for i in range(50)])
         self.assertEqual(res.status_code, 200, res.text)
         res = self.apply(specs=[{"name": "extra.spec.ts", "text": spec()}])
         self.assertEqual(res.status_code, 422)

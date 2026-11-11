@@ -1,7 +1,7 @@
 // Edits made in the dashboard tables. Each function takes the file text and returns the new file text,
 // or throws an Error with a message for the person. Pure functions, no React.
 
-import { METHODS, STATUS_RE, scan, type TestCase } from './validation';
+import { METHODS, STATUS_RE, notRealText, scan, type TestCase } from './validation';
 
 // ---- Playwright specs ----
 
@@ -41,6 +41,7 @@ function titleProblem(title: string, quote = "'"): string {
   if (/[\r\n]/.test(title)) return 'The test case name must be one line';
   if (title.includes('\\')) return 'Backslashes are not supported in test case names here';
   if (quote === '`' && title.includes('${')) return 'The test case name cannot contain ${ here';
+  if (notRealText(title)) return 'Use a real test case name that says what it checks, like "user can log in"';
   return '';
 }
 
@@ -138,7 +139,8 @@ const isTestEvent = (e: any) => e && e.listen === 'test';
 const scriptText = (e: any) => [].concat(e.script?.exec ?? []).join('\n').trim();
 
 function fieldProblem(field: RequestField, value: string): string {
-  if (field === 'name') return !value ? 'The name cannot be empty' : value.length > 200 ? 'The name is too long (200 characters at most)' : /[\r\n]/.test(value) ? 'The name must be one line' : '';
+  if (field === 'name') return !value ? 'The name cannot be empty' : value.length > 200 ? 'The name is too long (200 characters at most)' : /[\r\n]/.test(value) ? 'The name must be one line'
+    : notRealText(value) ? 'Use a real request name, like "Get products"' : '';
   if (field === 'url') return !value ? 'The URL cannot be empty' : value.length > 2000 ? 'The URL is too long' : /[\r\n]/.test(value) ? 'The URL must be one line' : '';
   if (field === 'method') return METHODS.includes(value) ? '' : 'Choose a valid method';
   return value === '' || (/^\d{3}$/.test(value) && +value >= 100 && +value <= 599) ? '' : 'The status code must be between 100 and 599, or empty';

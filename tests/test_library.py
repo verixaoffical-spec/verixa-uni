@@ -79,7 +79,7 @@ class SaveTests(unittest.TestCase):
         self.assertEqual(e.status, 422)
 
     def test_library_size_limit(self):
-        many = [{"name": f"s{i}.spec.ts", "text": spec(str(i)), "revision": None} for i in range(51)]
+        many = [{"name": f"s{i}.spec.ts", "text": spec(f"case {i}"), "revision": None} for i in range(51)]
         e = error(specs=many)
         self.assertEqual(e.status, 422)
         self.assertIn("at most 50", e.detail)

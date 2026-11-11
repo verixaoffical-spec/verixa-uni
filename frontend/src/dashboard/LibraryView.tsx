@@ -45,9 +45,9 @@ export default function LibraryView({ hidden, link, hook, library, onGoConnect }
     library.addSpecs(files, replacingName);
   }
 
-  function addCollection(files: File[]) {
+  function addCollection(files: File[], replacing = false) {
     setTab('pm');
-    library.addCollection(files);
+    library.addCollection(files, replacing);
   }
 
   // "Replace file" opens a file picker. The chosen file then takes the old one's place.
@@ -61,7 +61,7 @@ export default function LibraryView({ hidden, link, hook, library, onGoConnect }
   function onReplaceFile(file: File | undefined) {
     if (!file || !replacing) return;
     if (replacing.kind === 'pw') addSpecs([file], replacing.name);
-    else addCollection([file]);
+    else addCollection([file], true);
     setReplacing(null);
   }
 
@@ -132,11 +132,12 @@ export default function LibraryView({ hidden, link, hook, library, onGoConnect }
           </div>
 
           <div className="pane" hidden={tab !== 'pm'}>
-            <DropZone big={!lib.collection} accept={COLLECTION_ACCEPT} inputRef={collectionInput} onFiles={addCollection}
-                      title={['Drop your Postman collection here', 'Add a different collection']}
-                      text={['or click to browse. Export it from Postman as a collection .json file.',
-                             'Drop a collection .json or browse. It will replace the current one.']}
-                      rules={['Collection v2.0 or v2.1', '5 MB at most', 'One collection']} />
+            <DropZone big={!lib.collection} accept={COLLECTION_ACCEPT} inputRef={collectionInput} onFiles={files => addCollection(files)}
+                      title={['Drop your Postman collection here', 'One collection only']}
+                      text={['or click to browse. One collection only: export it from Postman as a .json file.',
+                             hasCollection ? 'A collection is already added. To use a different one, click Replace file on it, or delete it first.'
+                                           : 'Drop a collection .json or browse.']}
+                      rules={['Collection v2.0 or v2.1', '5 MB at most', 'One collection only']} />
             {steps(!lib.collection, 'Add your file')}
             {rejectedCards('pm')}
             {lib.collection && (

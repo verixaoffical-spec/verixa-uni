@@ -86,6 +86,7 @@
 
   /* Bottom action bar */
   .bar{position:sticky;bottom:0;margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 20px 14px 28px;border-top:1px solid var(--hair);background:rgba(9,9,12,.92);backdrop-filter:blur(10px);border-radius:0 0 18px 18px;}
+  .bar{z-index:6;}  /* stays above a long table's sticky "Add" row, so Confirm import is never covered */
   .bar-actions{display:flex;gap:8px;margin-left:auto;}
   .state{display:flex;align-items:center;gap:8px;font-size:13px;color:#5FD199;}
   .state i{width:8px;height:8px;border-radius:50%;background:currentColor;}

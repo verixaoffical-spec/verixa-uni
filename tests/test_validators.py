@@ -98,7 +98,21 @@ class CollectionTests(unittest.TestCase):
         self.assertTrue(any("schema" in e for e in analyse_collection(text)["errors"]))
 
     def test_bad_json(self):
-        self.assertTrue(analyse_collection("{oops")["errors"][0].startswith("Not valid JSON"))
+        errors = analyse_collection("{oops")["errors"]
+        self.assertTrue(any(e.startswith("Not valid JSON") for e in errors))
+        self.assertIn("Add a real file", errors[0])  # the plain message comes first
+
+    def test_not_real_names(self):
+        from backend.validators import analyse_spec, not_real_text
+        for fake in ("1234", "!!!!", "---", "aaaa", "xxxxx"):
+            self.assertTrue(not_real_text(fake), fake)
+        for real in ("a", "Login", "user can log in", "GET 200", "x2"):
+            self.assertFalse(not_real_text(real), real)
+        text = ("import { test, expect } from '@playwright/test';\n"
+                "test('12345', async () => { expect(1).toBe(1); });\n")
+        self.assertTrue(any("are not real" in e for e in analyse_spec(text)["errors"]))
+        bad = collection(item=[{"name": "1234", "request": {"method": "GET", "url": "https://x.test"}}])
+        self.assertTrue(any("not a real request name" in e for e in analyse_collection(bad)["errors"]))
 
     def test_bad_request(self):
         text = collection(item=[{"name": "a", "request": {"method": "FETCH", "url": ""}}])

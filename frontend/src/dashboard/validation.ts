@@ -61,6 +61,15 @@ export interface CollectionAnalysis {
   requests: RequestRow[];
 }
 
+// True for a name that is not real words: no letter at all ("1234", "!!!") or one character over and over ("aaaa").
+// The same rule lives in backend/validators.py.
+export function notRealText(value: string): boolean {
+  const s = value.replace(/\s+/g, '');
+  return !!s && (!/\p{L}/u.test(s) || (s.length >= 3 && new Set(s.toLowerCase()).size === 1));
+}
+
+export const NOT_REAL_FILE = 'This file has no real test content. Add a real file';
+
 // Returns why a file name is unsafe on some operating system, or an empty string when it is fine.
 export function invalidName(name: string): string {
   if (!name || name !== name.trim()) return 'File name cannot start or end with a space';
@@ -148,6 +157,9 @@ export function analyseSpec(text: string): SpecAnalysis {
     at: m.index!, end: m.index! + m[0].length, quote: m[2],
   }));
   if (!tests.length) errors.push('No tests found. Add at least one test("title", async ({ page }) => { ... })');
+  if (errors.length >= 2 && !tests.length) errors.unshift(NOT_REAL_FILE + ': a Playwright spec exported from your project');
+  const fake = tests.filter(t => notRealText(t.title)).map(t => `"${t.title}"`);
+  if (fake.length) errors.push(`Test names ${fake.slice(0, 3).join(', ')}${fake.length > 3 ? ' and more' : ''} are not real. Use real names that say what each test checks`);
   if (tests.some(t => t.mode === 'only')) warnings.push('test.only found. The runner would skip every other test');
   if (!/\bexpect\s*\(/.test(clean)) warnings.push('No assertions found. A test without expect() cannot fail');
   if (SECRET_RE.test(text)) warnings.push(SECRET_WARN);
@@ -183,14 +195,15 @@ function checkOf(item: any): Check {
 
 export function analyseCollection(text: string): CollectionAnalysis {
   let json: any;
-  try { json = JSON.parse(text); } catch (e) { return failed(['Not valid JSON. ' + (e as Error).message]); }
-  if (!json || typeof json !== 'object' || Array.isArray(json)) return failed(['Expected a Postman collection object at the top level']);
+  try { json = JSON.parse(text); } catch (e) { return failed([NOT_REAL_FILE + ': a collection exported from Postman', 'Not valid JSON. ' + (e as Error).message]); }
+  if (!json || typeof json !== 'object' || Array.isArray(json)) return failed([NOT_REAL_FILE + ': a collection exported from Postman', 'Expected a Postman collection object at the top level']);
   if (Array.isArray(json.values) && !json.item) return failed(['This is a Postman environment file. Export the collection instead']);
 
   const errors: string[] = [], warnings: string[] = [], info = json.info || {};
   const version = /schema\.getpostman\.com\/json\/collection\/v(2\.[01])\.0\//.exec(info.schema || '');
   if (!version) errors.push('Unsupported or missing schema. Export as Collection v2.0 or v2.1');
   if (typeof info.name !== 'string' || !info.name.trim()) errors.push('Collection has no name');
+  else if (notRealText(info.name)) errors.push(`Collection name "${info.name}" is not real. Give it a real name`);
   if (!Array.isArray(json.item) || !json.item.length) return failed([...errors, 'Collection has no items']);
 
   const requests: RequestRow[] = [], bad: string[] = [], folderList: FolderOption[] = [];
@@ -209,6 +222,7 @@ export function analyseCollection(text: string): CollectionAnalysis {
       if (!r) { bad.push(`"${name}" is neither a folder nor a request`); return; }
       const method = typeof r === 'string' ? 'GET' : String(r.method || 'GET').toUpperCase();
       const url = urlOf(r);
+      if (item?.name && notRealText(String(item.name))) bad.push(`"${name}" is not a real request name. Use a real name, like "Get products"`);
       if (!METHODS.includes(method)) bad.push(`"${name}" uses unsupported method ${method}`);
       const scheme = BAD_URL_RE.exec(url);
       if (!url.replace(/\//g, '').trim()) bad.push(`"${name}" has no URL`);

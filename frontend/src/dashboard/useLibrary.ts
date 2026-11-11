@@ -56,15 +56,36 @@ export function useLibrary() {
 
   // ---- files ----
 
-  async function addSpecs(files: File[], replacing?: string) {
-    const picked = await Promise.all(files.map(f => readFile(f, LIMITS.specBytes)));
-    change(l => L.addSpecFiles(l, picked, replacing));
+  // Says what happened to the files just picked: added, or not added with the reasons shown on the page
+  function reportAdded(kind: L.Kind, names: string[], replacing: boolean) {
+    if (!names.length) return;
+    const refused = new Set(latest.current.rejected.filter(r => r.kind === kind).map(r => r.name));
+    const bad = names.filter(n => refused.has(n)).length, ok = names.length - bad;
+    const save = 'Click Confirm import to save';
+    if (kind === 'pm' && names.length > 1) {
+      const first = !refused.has(names[0]);
+      toast(`Only one collection is allowed, and you added ${names.length}. ` +
+        (first ? `"${names[0]}" was added, the other ${names.length - 1} were not` : `None were added. The reasons are shown on the page`));
+      return;
+    }
+    if (!bad) toast(replacing ? `File replaced. ${save}` : kind === 'pm' ? `Collection added. ${save}` : `${plural(ok, 'file')} added. ${save}`);
+    else if (ok) toast(`${ok} added, ${bad} not added. The reasons are shown on the page`);
+    else toast(`${plural(bad, 'file')} not added. The reasons are shown on the page`);
   }
 
-  async function addCollection(files: File[]) {
+  async function addSpecs(files: File[], replacing?: string) {
+    const picked = await Promise.all(files.map(f => readFile(f, LIMITS.specBytes)));
+    if (change(l => L.addSpecFiles(l, picked, replacing))) reportAdded('pw', picked.map(f => f.name), !!replacing);
+  }
+
+  async function addCollection(files: File[], replacing = false) {
+    const current = latest.current.collection;
+    const blocked = !!current && !current.removed && !replacing;
     const picked = await Promise.all(files.slice(0, 1).map(f => readFile(f, LIMITS.collectionBytes)));
     const extras = files.slice(1).map(f => ({ name: f.name, size: f.size, text: null }));
-    change(l => L.addCollectionFile(l, [...picked, ...extras]));
+    if (!change(l => L.addCollectionFile(l, [...picked, ...extras], replacing))) return;
+    if (blocked) toast(`Not added. Only one collection is allowed, and "${current!.name}" is already here. Use Replace file on it, or delete it first`);
+    else reportAdded('pm', [...picked, ...extras].map(f => f.name), replacing);
   }
 
   function removeSpec(name: string) {

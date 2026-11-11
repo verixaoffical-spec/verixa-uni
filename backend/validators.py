@@ -122,6 +122,16 @@ def scan(src: str) -> tuple[str, bool]:
     return "".join(out), quote is None and not stack
 
 
+NOT_REAL_FILE = "This file has no real test content. Add a real file"
+
+
+def not_real_text(value: str) -> bool:
+    """A name that is not real words: no letter at all ("1234", "!!!") or one character over and over ("aaaa").
+    The same rule lives in frontend/src/dashboard/validation.ts."""
+    s = re.sub(r"\s+", "", value or "")
+    return bool(s) and (not re.search(r"[^\W\d_]", s) or (len(s) >= 3 and len(set(s.lower())) == 1))
+
+
 def analyse_spec(text: str) -> dict:
     clean, balanced = scan(text)
     errors, warnings = [], []
@@ -138,6 +148,12 @@ def analyse_spec(text: str) -> dict:
         tests.append({"title": m.group(3), "line": line, "mode": m.group(1) or ""})
     if not tests:
         errors.append('No tests found. Add at least one test("title", async ({ page }) => { ... })')
+    if len(errors) >= 2 and not tests:
+        errors.insert(0, NOT_REAL_FILE + ": a Playwright spec exported from your project")
+    fake = [f'"{t["title"]}"' for t in tests if not_real_text(t["title"])]
+    if fake:
+        errors.append(f"Test names {', '.join(fake[:3])}{' and more' if len(fake) > 3 else ''} are not real. "
+                      "Use real names that say what each test checks")
     if any(t["mode"] == "only" for t in tests):
         warnings.append("test.only found. The runner would skip every other test")
     if not re.search(r"\bexpect\s*\(", clean):
@@ -192,9 +208,9 @@ def analyse_collection(text: str) -> dict:
     try:
         data = json.loads(text)
     except (ValueError, RecursionError) as exc:
-        return {"errors": [f"Not valid JSON. {exc}"]}
+        return {"errors": [NOT_REAL_FILE + ": a collection exported from Postman", f"Not valid JSON. {exc}"]}
     if not isinstance(data, dict):
-        return {"errors": ["Expected a Postman collection object at the top level"]}
+        return {"errors": [NOT_REAL_FILE + ": a collection exported from Postman", "Expected a Postman collection object at the top level"]}
     if isinstance(data.get("values"), list) and not data.get("item"):
         return {"errors": ["This is a Postman environment file. Export the collection instead"]}
 
@@ -205,6 +221,8 @@ def analyse_collection(text: str) -> dict:
         errors.append("Unsupported or missing schema. Export as Collection v2.0 or v2.1")
     if not isinstance(info.get("name"), str) or not info["name"].strip():
         errors.append("Collection has no name")
+    elif not_real_text(info["name"]):
+        errors.append(f'Collection name "{info["name"]}" is not real. Give it a real name')
     if not isinstance(data.get("item"), list) or not data["item"]:
         return {"errors": errors + ["Collection has no items"]}
 
@@ -231,6 +249,8 @@ def analyse_collection(text: str) -> dict:
                 continue
             method = "GET" if isinstance(request, str) else str(request.get("method") or "GET").upper()
             url = _url_of(request)
+            if item.get("name") and not_real_text(str(item["name"])):
+                bad.append(f'"{name}" is not a real request name. Use a real name, like "Get products"')
             if method not in METHODS:
                 bad.append(f'"{name}" uses unsupported method {method}')
             if not url.replace("/", "").strip():
