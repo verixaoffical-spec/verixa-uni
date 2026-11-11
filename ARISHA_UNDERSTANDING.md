@@ -2,6 +2,109 @@
 
 Read this from top to bottom. By the end, you should be able to explain the project in your own words.
 
+This guide matches the final code on the `final_v5` branch.
+
+## 0. FYP evaluation ke liye sab se zaroori baatein
+
+Agar waqt kam ho, to sirf yeh section parh lein.
+
+### Verixa ek line mein
+
+> "Verixa ek QA tool hai jo har GitHub pull request ko khud parhta hai, rules se Low, Medium ya High risk label deta hai, aur AI
+> se wajah aur test karne ki cheezein likhwata hai, taake QA team pehle zyada khatarnak changes test kare."
+
+### Masla aur hal
+
+| | |
+|---|---|
+| **Masla** | QA team ke paas waqt kam hota hai, aur har PR ko barabar test karna mumkin nahi |
+| **Hal** | Har PR ka risk khud nikalna, taake team pehle High wale test kare |
+| **Khaas baat** | Label **rules** dete hain, AI nahi. AI sirf explanation likhta hai, is liye label hamesha same aur samjhaya ja sakne wala hota hai |
+
+### Tech stack: kya use kiya aur kyun
+
+| Tool | Yeh kya hai | Hum ne kyun liya |
+|---|---|---|
+| **React 18** | Website ki screens banane ki JavaScript library | Screen ko **components** mein banate hain: button, table, form, sab alag alag tukre. Ek tukra ek dafa banao, kai jagah use karo. Data badle to sirf woh hissa update hota hai, poora page reload nahi hota |
+| **TypeScript** | JavaScript, jis mein har cheez ki "type" likhi hoti hai | Galtiyan code chalne se **pehle** pakri jati hain. Misaal: number ki jagah text bhej diya, to editor foran bata deta hai |
+| **Vite** | Frontend ko build aur chalane ka tool | Bohat tez hai, aur React aur TypeScript ko browser ke samajhne wali files mein badal deta hai |
+| **Python** | Programming language | AI agents aur AI libraries sab se zyada Python mein milti hain, is liye backend bhi Python mein rakha. Poora server ek hi language mein |
+| **FastAPI** | **Python** ka web framework, yaani server banane ka tool | Tez hai. Aane wala data khud check karta hai, misaal: email sahi format mein hai ya nahi. Webhook ka lamba kaam background mein kar sakta hai, aur WebSocket support karta hai |
+| **Uvicorn** | Woh program jo FastAPI app ko chalata hai | FastAPI apps chalane ka standard tareeqa |
+| **PostgreSQL (Neon)** | Database, jo internet par cloud mein hai | Free hai, aur online hai, is liye dono team members ek hi data use karte hain. Reliable aur mashhoor database hai |
+| **SQLAlchemy** | Python se database use karne ki library | SQL likhne ke bajaye Python code se data save aur parh sakte hain. Tests mein yahi code alag SQLite file par chalta hai |
+| **Google ADK** | AI agents banane ka framework | Manager aur Analysis Agent ka "kaam do, jawab check karo, dobara poocho" wala loop is par bana hai |
+| **LiteLLM** | Ek library jo kai AI companies se ek hi tareeqe se baat karti hai | Model badalna ho to code nahi badalta. Ek model fail ho to agla khud try hota hai |
+| **Groq** (`gpt-oss-20b`, `gpt-oss-120b`) | AI model chalane wali service | Bohat tez hai aur free tier deti hai. Backup ke liye OpenRouter aur Gemini bhi set ho sakte hain |
+| **GitHub OAuth, API, webhooks** | GitHub se login, data parhna, aur GitHub ki khabar | "Continue with GitHub" login, PR ki files parhna, aur PR khulte hi GitHub khud Verixa ko batata hai |
+| **Atlassian OAuth (Jira)** | Jira se judne ka tareeqa | User apna Jira project chunta hai. Tickets banana agle deliverable mein hai |
+| **WebSocket** | Browser (dashboard) aur hamare backend server (FastAPI) ke beech hamesha khula raasta, `/api/live` par | Agent ka har step backend khud browser ko bhej deta hai, is liye screen foran update hoti hai aur page refresh nahi karna parta |
+| **scrypt, Fernet, signed cookies, pyotp** | Security ki libraries | Password ka hash, tokens ko encrypt karna, login cookie ko jaali banne se rokna, aur 2FA ke 6 digit codes |
+| **SMTP (Gmail)** | Email bhejne ka tareeqa | Forgot password ka link bhejna |
+| **ngrok** | Laptop ko internet par ek public address deta hai | GitHub ka webhook laptop par chalti app tak pohanch sake |
+| **unittest, Playwright** | Testing tools | `unittest` code ke tests chalata hai. Playwright asli browser khol kar click kar ke check karta hai |
+
+### System kaise chalta hai (seedha flow)
+
+```text
+Developer GitHub par PR kholta hai
+        |
+GitHub webhook bhejta hai  -->  ngrok  -->  Verixa server (FastAPI)
+        |
+Server signature check karta hai, 202 bolta hai, kaam background mein
+        |
+Manager Agent  -->  Analysis Agent
+        |               |  GitHub se PR, purani bugs aur CI result parhta hai
+        |               |  Rules se score aur label
+        |               |  Secrets chhupa kar AI se explanation
+        |
+Manager AI ka jawab check karta hai (3 koshish tak)
+        |
+Result Neon database mein  -->  WebSocket  -->  Risk Analysis screen
+```
+
+### Main features (jo demo mein dikhane hain)
+
+1. **Account:** email aur password se signup ya login, ya **Continue with GitHub**.
+2. **2FA:** authenticator app ka 6 digit code, aur 10 recovery codes.
+3. **Forgot password:** email par link, jo 30 minute aur sirf ek dafa chalta hai.
+4. **Connect:** GitHub repo aur Jira project chunna. Verixa webhook khud lagata hai.
+5. **Test Library:** Playwright specs aur Postman collection upload karna, har file pehle check hoti hai.
+6. **Risk Analysis:** har PR ka label, score, wajah, AI ki explanation aur test areas, live updates ke saath.
+7. **Privacy Policy aur Terms** pages.
+
+### Security mein kya kiya (mentor zaroor poochte hain)
+
+| Khatra | Hamara bachao |
+|---|---|
+| Password chori | Sirf scrypt hash save hota hai, asli password kabhi nahi |
+| Database leak | GitHub aur Atlassian tokens aur 2FA secrets encrypted hain |
+| Password guess karna | 5 ghalat koshishon par 15 minute ki rok |
+| Password chori ho jaye | 2FA ka code bhi chahiye |
+| Nakli webhook | GitHub ka signature check hota hai, ghalat ho to 401 |
+| Script injection (XSS) | Input check hota hai, aur Content Security Policy laga hai |
+| AI ko dhoka dena | Label rules se aata hai, aur PR ka text AI ko "data" bata kar diya jata hai |
+| Secret AI tak pohanchna | Keys aur passwords `[HIDDEN SECRET]` se badal diye jate hain |
+| Dusre ka data dekhna | Har request par check hota hai ke data isi account ka hai |
+
+### Kamzoriyan (sach batayein, mentors ko pasand aata hai)
+
+- Signup par email verify nahi hota, aur 2FA khud on karna parta hai, zaroori nahi.
+- Ek account ka ek hi project hai, aur team sharing nahi.
+- Private code ka hissa AI provider (Groq) ko jata hai, secrets chhupa kar.
+- GitHub ki `repo` permission bari hai, halaanke agents sirf parhte hain.
+- 87% accuracy hamare apne likhe 30 examples par hai, real projects par nahi naapi.
+- Login ki rok server ki memory mein hai, restart par khatam ho jati hai.
+- Tests chalana aur Jira tickets banana agle deliverables mein hain.
+
+### Abhi kya bana hai, aur aage kya
+
+| Deliverable | Kya | Status |
+|---|---|---|
+| 1 | App: login, 2FA, connect, Test Library | Done |
+| 2 | Analysis Agent aur Manager: risk scoring | Done |
+| 3 se 5 | Tests chalana, evidence, Jira tickets, report | Agla semester |
+
 ## 1. The idea in one minute
 
 Developers change code through **pull requests (PRs)**. Some changes are harmless, like fixing a typo. Others are dangerous, like
@@ -46,17 +149,17 @@ Let's follow a real sample: **"Limit cart quantity to 10"**, a one-line change i
 | 1 | A developer opens the PR on GitHub | |
 | 2 | GitHub sends a webhook through ngrok to our server | |
 | 3 | The server checks the signature, and refuses it with a 401 if it's wrong | `backend/main.py`, `backend/security.py` |
-| 4 | The server replies 202->202 Accepted: Indicates that a server has received and accepted a request for processing, but the processing is not yet complete.
- right away, and does the work in the background, because GitHub only waits 10 seconds | `backend/main.py` |
+| 4 | The server replies **202 Accepted** right away ("received, still working on it"), and does the work in the background, because GitHub only waits 10 seconds | `backend/main.py` |
 | 5 | A row is created in the database with state `running` | `backend/analysis_service.py` |
 | 6 | The Manager gives the job to the Analysis Agent | `agents/runner.py`, `agents/manager.py` |
-| 7 | The agent reads the PR from GitHub, and counts past bug fixes | `agents/github_client.py` |
+| 7 | The agent reads the PR from GitHub, counts past bug fixes, and reads the commit's CI result | `agents/github_client.py` |
 | 8 | The rules work out the score and label | `agents/risk_rules.py` |
 | 9 | Secrets are replaced with `[HIDDEN SECRET]` | `agents/redact.py` |
 | 10 | The AI writes the explanation and test ideas | `agents/analysis.py` |
 | 11 | The Manager checks the answer, and asks again if it's bad, up to 3 tries | `agents/manager.py` |
 | 12 | The result is saved | `backend/analysis_service.py`, `backend/agent_db.py` |
-| 13 | The dashboard shows it | `backend/analysis_api.py`, `frontend/src/dashboard/RiskView.tsx` |
+| 13 | The dashboard shows it, and each step appears live over a WebSocket | `backend/analysis_api.py`, `backend/live.py`, `frontend/src/dashboard/RiskView.tsx` |
+| 14 | If CI finishes later and fails, GitHub sends a `check_suite` event, and the label is raised to High | `backend/main.py`, `backend/analysis_service.py` |
 
 ## 4. How the label is calculated
 
@@ -76,6 +179,10 @@ score = size points + past bug points + sensitive code points
 - Security or payment code is at least High.
 - User, data or config code is at least Medium.
 - 10 or more files and 500 or more lines is High.
+- The build or tests fail on the commit (CI) is High.
+- Removing a login or permission check, or a security setting, is High.
+- Writing a password or key into the code is High.
+- Removing input checks, error handling or test cases is at least Medium.
 
 ### Practice these two
 
@@ -114,6 +221,9 @@ files 1 + lines 1 + past bugs 0 + sensitive 2 = 4
 - It calls the change safe, or says it needs no testing.
 
 **After 3 failed tries,** the PR goes to `needs_human_review`, and keeps its rule-based label.
+
+**The AI can disagree, but cannot change the label.** If it thinks the label may be wrong, it writes one sentence in `concern`, naming
+the changed line. The screen shows this note, and a person decides.
 
 ### What a row's state means
 
@@ -156,9 +266,12 @@ results, so it never makes up a label.
 
 | Type | Meaning | Result |
 |---|---|---|
-| **Python tests** | Real agent code, with GitHub and the AI faked | 399 of 399 pass |
+| **Python tests** | Real app and agent code, with GitHub and the AI faked | 357 of 359 pass on the final code. The 2 that failed only check speed, and failed because the computer was slow at that time |
 | **Browser tests, scripted** | Real browser and app, with GitHub and the AI faked | 31 of 31 pass |
+| **Browser tests, forgot password** | 57 cases in a real browser | 56 pass, 1 skipped on purpose |
+| **Browser test, 2FA** | Sign up, turn on 2FA, log in with the code and a recovery code | 11 of 11 pass |
 | **Browser tests, live** | Real GitHub and real AI, on Shoplite | 5 of 5 pass |
+| **Real repositories** | A public repo, and a private repo where a collaborator opened the PR | Both scored automatically |
 | **Attacks** | Hidden instructions trying to trick the real AI | Not tricked in 5 of 5 |
 | **Label accuracy** | 30 example PRs with known answers | 26 correct, 87% |
 
@@ -206,6 +319,17 @@ Try answering each one aloud first, then check.
 > AI ka explanation ghalat ho sakta hai, is liye insaan ko check karna chahiye. 87% accuracy hamari apni likhi hui examples par hai. Tests abhi
 > run nahi hote, woh agle deliverable mein hain.
 
+**11. Yeh tech stack kyun chuna?**
+> Agents Python mein hain, is liye backend bhi Python (FastAPI) rakha. Frontend React aur TypeScript mein hai, taake screens saaf bane
+> aur ghalti pehle pakri jaye. Database Neon PostgreSQL hai, jo free aur online hai. AI ke liye LiteLLM, taake ek model fail ho to doosra
+> chal jaye.
+
+**12. Live updates kaise aate hain?**
+> WebSocket se. Agent ka har step server foran browser ko bhejta hai, is liye page refresh karne ki zaroorat nahi parti.
+
+**13. Agar CI baad mein fail ho to?**
+> GitHub `check_suite` event bhejta hai. Verixa us commit ka result dobara parhta hai, aur fail ho to label High kar deta hai.
+
 ## 9. Files to read, in order
 
 Don't try to read everything. These 8 files explain most of the project:
@@ -218,6 +342,8 @@ Don't try to read everything. These 8 files explain most of the project:
 6. `backend/analysis_service.py`: look at `analyse_pull_request`.
 7. `backend/analysis_api.py`: how results reach the screen.
 8. `frontend/src/dashboard/RiskView.tsx`: the screen.
+9. `backend/live.py`: the live updates over the WebSocket.
+10. `backend/auth.py`, `backend/twofactor.py`, `backend/password_reset.py`: login, 2FA and forgot password.
 
 ## 10. Try it yourself
 
@@ -349,6 +475,83 @@ Webhook matlab **GitHub khud bata deta hai ke kuch hua hai.** Misaal: courier kh
 | **GitHub App** | GitHub ka app, jis mein webhook built-in hota hai | Yeh bhi webhook hi use karta hai, aur banane mein zyada kaam hai |
 
 Isi liye webhook sab se behtar hai, aur GitHub bhi polling ke bajaye webhooks ka mashwara deta hai.
+
+### "GitHub webhook bhejta hai" ka asal matlab kya hai?
+
+PR khulte hi GitHub ka server hamare address par ek **HTTP POST request** bhejta hai:
+
+```text
+POST https://sedate-thicket-eclipse.ngrok-free.dev/webhooks/github
+X-GitHub-Event: pull_request          (kya hua)
+X-Hub-Signature-256: sha256=...       (signature, jaali message rokne ke liye)
+X-GitHub-Delivery: 3ffd0070-...       (is message ki ID)
+
+{ "action": "opened",
+  "number": 5,
+  "pull_request": { "title": "...", "head": { "sha": "..." }, "user": { "login": "..." } },
+  "repository": { "full_name": "verixaoffical-spec/Shoplite" } }
+```
+
+Is mein code ka diff nahi hota, sirf PR ki pehchan hoti hai. Diff phir agent GitHub API se khud parhta hai.
+
+`opened`, `synchronize` (naya push) aur `reopened` par analysis chalti hai. `check_suite` message CI khatam hone par aata hai. Har message
+GitHub repo ki **Settings > Webhooks > Recent Deliveries** mein dekha ja sakta hai.
+
+### Webhook GitHub se Verixa ke FastAPI server tak kaise pohanchta hai?
+
+1. **Set kahan hota hai:** GitHub repo ki settings mein. Verixa connect karte waqt khud lagata hai, address `PUBLIC_URL/webhooks/github`,
+   yaani `https://sedate-thicket-eclipse.ngrok-free.dev/webhooks/github`.
+2. **GitHub bhejta hai:** PR khulte hi GitHub us ngrok address par message bhejta hai. Yeh ngrok ke internet wale server par pohanchta hai.
+3. **ngrok aage bhejta hai:** laptop par chalti `ngrok.exe` ne ngrok ke server se pehle se ek raasta khola hua hai. ngrok message isi
+   raaste se laptop ke `localhost:8000` par de deta hai.
+4. **FastAPI leta hai:** `localhost:8000` par Uvicorn hamara FastAPI app chala raha hai. `/webhooks/github` route (`backend/main.py`)
+   signature check karta hai, 202 bolta hai, aur agents ko kaam deta hai.
+
+```text
+GitHub  -->  ngrok cloud  -->  ngrok.exe (laptop)  -->  localhost:8000 (Uvicorn + FastAPI)  -->  /webhooks/github
+```
+
+ngrok sirf **dakiya** hai: message nahi parhta aur nahi badalta. Asal kaam FastAPI karta hai. ngrok ya server band ho to GitHub ka message
+nahi pohanchta, aur GitHub ki **Recent Deliveries** mein error dikhta hai.
+
+**Server band ho aur sirf ngrok chale to?** ngrok ke paas aage dene ki jagah nahi hoti. Browser mein ngrok ka error page aata hai, aur GitHub
+ki delivery fail hoti hai. Isi liye dono chalne chahiye: pehle Verixa server, phir ngrok, ya ulta bhi theek hai.
+
+### XSS kya hai, aur Verixa kaise bachata hai?
+
+**XSS (Cross-Site Scripting):** koi shakhs kisi field mein script likh deta hai, jaise PR ke title mein `<img src=x onerror=alert(1)>`.
+Agar website usay HTML samajh kar chala de, to woh code dusre users ke browser mein chalta hai, aur un ki cookie ya data chura sakta hai.
+
+**Verixa ke teen bachao:**
+
+1. **React text ko text hi dikhata hai:** `<script>` likha ho to screen par wahi likha dikhega, chalega nahi. Code mein kahin
+   `dangerouslySetInnerHTML` use nahi hua. Demo data mein PR #6 ka title yahi script hai, aur screen par woh sirf text dikhta hai.
+2. **Input check:** naam mein `<` jaise characters nahi chalte, file ke naam aur upload hone wali files pehle check hoti hain
+   (`backend/accounts.py`, `backend/validators.py`).
+3. **Content Security Policy (CSP):** server har page ke saath browser ko hukam bhejta hai ke script sirf hamari apni files se chalao
+   (`script-src 'self'`, `backend/main.py`). Agar kahin se script ghus bhi jaye, browser usay nahi chalata.
+
+**Mentor ke liye ek line:** "React har cheez ko text ki tarah dikhata hai, input check hota hai, aur CSP browser ko sirf hamari files
+ki scripts chalane deta hai. Tests mein script wale titles daal kar check kiya ke koi alert nahi chalta."
+
+### "2FA khud on karna parta hai" aur "team sharing nahi" ka matlab
+
+- **2FA optional hai:** signup ke baad user seedha dashboard par jata hai. 2FA tab hi lagta hai jab user khud account menu mein
+  **Security** khol kar on kare. Jo on na kare, us ka account sirf password se khulta hai. Behtar hota ke signup par hi zaroori hota.
+- **Email verify nahi hota:** signup par Verixa check nahi karta ke email waqai us shakhs ka hai, koi bhi kisi ka email daal sakta hai.
+- **Team sharing nahi:** `projects` table mein har user ka sirf ek project ho sakta hai (`user_id` unique). Results bhi sirf usi account
+  ko dikhte hain. Team ka doosra member apne account se wahi repo ke results nahi dekh sakta, jab tak woh khud alag se connect na kare,
+  aur connect sirf repo ka admin kar sakta hai.
+
+### Login session kaise chalta hai?
+
+1. Sahi password (aur 2FA on ho to code) ke baad server ek **session cookie** banata hai, jis mein user ki id aur `session_version` hota hai.
+2. `SessionMiddleware` is cookie par `SECRET_KEY` se signature lagata hai, taake koi badal na sake.
+3. Browser har request ke saath yeh cookie bhejta hai, aur server us se pehchanta hai ke kaun hai.
+4. Cookie **14 din** chalti hai, `HttpOnly` hai (JavaScript nahi parh sakta), aur `SameSite=lax` hai (doosri site se jaali request nahi chalti).
+5. `session_version` badalne se purani cookies band ho jati hain. Logout aur forgot password se reset par **har device** se logout hota hai.
+   Password change ya 2FA on/off karne par **baqi sab devices** se logout hota hai, aur jis device par yeh kiya, woh login rehta hai.
+6. 2FA wale user ka password sahi ho to bhi 5 minute tak sirf "aadha login" hota hai, jab tak code na de.
 
 ### Agar user contributor ho, ya repo private ho?
 
@@ -680,6 +883,60 @@ Account hamesha ke liye block nahi hota. Kuch der ke liye rok lagti hai, phir kh
 **Kamzori:** yeh ginti server ki memory mein hoti hai, is liye server restart hone par reset ho jati hai.
 
 **Mentor ke liye ek line:** "5 ghalat password ya 5 ghalat 2FA code par 15 minute ki rok lagti hai. Account permanent lock nahi hota, taake koi jaan bujh kar kisi aur ka account band na kar sake."
+
+### FastAPI Python par hai? React mein "components" ka kya matlab?
+
+**FastAPI Python ka framework hai.** Python language hai, aur FastAPI us mein server banane ka tool. Isi tarah React JavaScript ki library hai.
+
+**Components:** React mein screen ek hi bari cheez nahi hoti, balki chhote tukron se banti hai, jaise LEGO ke blocks.
+
+```text
+Risk Analysis screen
+ ├─ RiskBadge     (High / Medium / Low wala rang)
+ ├─ StateBadge    (Scored, Analysing waghera)
+ └─ Detail        (PR kholne par wajah aur test areas)
+```
+
+**FastAPI hi hamara backend server hai.** `backend/main.py` mein `app = FastAPI(...)` bana hai, aur Uvicorn usay chalata hai. Yeh login,
+2FA, GitHub ka webhook, agents ko kaam dena, database aur WebSocket, sab sambhalta hai, aur frontend ki files bhi browser ko yahi bhejta hai.
+
+**Backend ke kaam, simple words mein:**
+
+- **Webhook lena aur signature check:** PR khulte hi GitHub `/webhooks/github` par message bhejta hai. Saath mein `WEBHOOK_SECRET` se bana
+  ek signature hota hai. Server wahi signature khud bana kar milata hai (`backend/security.py`). Match na ho to message jaali hai, aur 401.
+- **Agents ko PR analyse karne dena:** server foran GitHub ko 202 bolta hai, aur background mein database row bana kar Manager aur Analysis
+  Agent ko PR deta hai (`backend/analysis_service.py`). Agents ka kaam khatam ho to result save hota hai.
+- **`db.py` aur `agent_db.py`:** dono same Neon database use karte hain. Dono se data save bhi hota hai aur parha bhi jata hai, bas tables
+  alag hain. `db.py` mein connection aur app ke tables hain: users, projects, Test Library, recovery codes, password resets.
+  `agent_db.py` mein sirf agents ka table hai: `risk_assessments`, yaani har PR ka label, score aur wajah.
+- **Website ki files bhejna:** React ka code build ho kar `frontend/dist` mein HTML, JavaScript, CSS aur video ban jata hai. Browser
+  Verixa ka address kholta hai to FastAPI yahi files bhejta hai, aur browser unhein dikhata hai. Alag frontend server nahi chahiye.
+
+`RiskBadge` ek dafa bana, aur har PR ki row mein wahi use hota hai. Badge ka rang badalna ho to sirf ek jagah badalna parta hai. Kisi PR ka state badle to sirf us row ka badge update hota hai, poora page nahi.
+
+### SQLAlchemy kis file mein hai?
+
+- **Setup:** `backend/db.py`. Line 9 par database se connection (`engine`), line 10 par session, aur `class User`, `class Project` jaise
+  tables. Agents ka table `class RiskAssessment` `backend/agent_db.py` mein hai.
+- **Use:** har jagah jahan data save ya parha jata hai, jaise `backend/auth.py`.
+
+```python
+# SQL mein:          SELECT * FROM users WHERE email = 'ada@x.com';
+# Hamare code mein:  db.scalar(select(User).where(User.email == email))   # auth.py, login
+#                    db.add(user); db.commit()                            # auth.py, signup
+```
+
+Faida: SQL injection se bachao, kyunke values khud mehfooz tareeqe se jati hain, aur wahi code Neon (PostgreSQL) aur tests ki SQLite
+dono par chalta hai.
+
+### 10 recovery codes kyun?
+
+Recovery code tab kaam aata hai jab phone kho jaye ya authenticator app delete ho jaye. Har code **sirf ek dafa** chalta hai.
+
+- **10 kyun:** kai dafa phone ke baghair login karna par sakta hai, aur 10 itne kam bhi hain ke user likh ya download kar ke rakh sake. Google bhi 10 deta hai. Yeh ek aam convention hai, koi zaroori number nahi (`RECOVERY_COUNT = 10`, `backend/totp.py`).
+- **Kaise bante hain:** har code 10 random letters aur numbers ka hota hai. `0, o, 1, i, l` jaise milte julte letters nahi hote, taake parhne mein ghalti na ho.
+- **Kaise save hote hain:** database mein sirf hash, asli code nahi.
+- **Khatam hone par:** login ke baad bataya jata hai ke kitne bache hain. Security mein **Make new recovery codes** se naye 10 ban jate hain, aur purane band ho jate hain.
 
 ### "87% sirf hamare examples par hai" ka kya matlab hai?
 

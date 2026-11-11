@@ -323,3 +323,72 @@
   .acct-item.danger:hover,.acct-item.danger:focus-visible{background:rgba(196,61,61,.14);color:#F8B4B4;}
   .acct-item:disabled{opacity:.6;cursor:default;}
   @media(max-width:760px){.acct{left:auto;right:0;bottom:auto;top:calc(100% + 10px);}}
+
+  /* ---------- light theme: the same workspace on a white background. Dark stays the default ---------- */
+  :root[data-theme="light"]{
+    --foreground:240 30% 6%; --muted-foreground:240 6% 38%; --border:240 10% 84%;
+    --warn:#A35F00; --bad:#C43D3D; --hair:rgba(15,15,40,.09); --soft:rgba(15,15,40,.03);
+    color-scheme:light;
+  }
+  :root[data-theme="light"] body{background:#F4F4F8;}
+  :root[data-theme="light"] .app{background:radial-gradient(ellipse 60% 380px at 40% 0,hsl(var(--accent)/.1),transparent 70%) no-repeat,#F4F4F8;}
+  :root[data-theme="light"] .rail{background:#fff;}
+  :root[data-theme="light"] .logo,:root[data-theme="light"] .ri{color:#6B6D7A;}
+  :root[data-theme="light"] .ri:hover:not(:disabled){color:#0B0B14;background:rgba(15,15,40,.05);}
+  :root[data-theme="light"] .ri.active{color:#4B3FC4;background:hsl(var(--accent)/.14);}
+  :root[data-theme="light"] .avatar{color:#fff;}
+  :root[data-theme="light"] .card,:root[data-theme="light"] .panel{background:#fff;box-shadow:0 1px 2px rgba(20,20,50,.05),0 20px 50px -30px rgba(25,25,70,.25);}
+  :root[data-theme="light"] .chip,:root[data-theme="light"] .how b,:root[data-theme="light"] .folder,:root[data-theme="light"] .foldertag{color:#45475A;}
+  :root[data-theme="light"] .btn:disabled{background:#ECECF2;color:#6E7082;}
+  :root[data-theme="light"] .btn:disabled kbd{background:rgba(15,15,40,.08);}
+  :root[data-theme="light"] .btn.ghost{color:#2A2A3A;}
+  :root[data-theme="light"] .btn.ghost:hover:not(:disabled){background:rgba(15,15,40,.06);}
+  :root[data-theme="light"] .btn.ghost:disabled{background:var(--soft);}
+  :root[data-theme="light"] .is-active .lic,:root[data-theme="light"] .fi,:root[data-theme="light"] .lock-ico{color:#4B3FC4;}
+  :root[data-theme="light"] .is-done .lic,:root[data-theme="light"] .note,:root[data-theme="light"] .state{color:#15803D;}
+  :root[data-theme="light"] .state.idle{color:#6B6D7A;}
+  :root[data-theme="light"] .state.dirty{color:var(--warn);}
+  :root[data-theme="light"] .state.busy{color:#4B3FC4;}
+  :root[data-theme="light"] select{background:#fff;}
+  :root[data-theme="light"] .term{background:var(--soft);}
+  :root[data-theme="light"] .term .fin,:root[data-theme="light"] .empty b{color:#0B0B14;}
+  :root[data-theme="light"] .bar{background:rgba(255,255,255,.92);}
+  :root[data-theme="light"] .tab:hover,:root[data-theme="light"] .tab[aria-selected="true"],:root[data-theme="light"] summary:hover,:root[data-theme="light"] .x:hover{color:#0B0B14;}
+  :root[data-theme="light"] .tab b,:root[data-theme="light"] .ph b,:root[data-theme="light"] .badge.new{color:#4B3FC4;}
+  :root[data-theme="light"] .drop{border-color:rgba(15,15,40,.2);}
+  :root[data-theme="light"] .drop:hover,:root[data-theme="light"] .drop.over,:root[data-theme="light"] .drop:focus-within{border-color:hsl(var(--accent));}
+  :root[data-theme="light"] .rules span{background:rgba(15,15,40,.03);color:#55576A;}
+  :root[data-theme="light"] .rejcard .why,:root[data-theme="light"] .why{color:#45475A;}
+  :root[data-theme="light"] .file{background:#fff;}
+  :root[data-theme="light"] .acts .btn.ghost:hover:not(:disabled){background:rgba(15,15,40,.06);color:#0B0B14;}
+  :root[data-theme="light"] .badge.saved{color:#15803D;}
+  :root[data-theme="light"] .code{background:#F7F7FA;}
+  :root[data-theme="light"] .req .m{background:#ECECF2;color:#45475A;}
+  :root[data-theme="light"] .m.GET,:root[data-theme="light"] select.m-GET{color:#0F766E;}
+  :root[data-theme="light"] .m.POST,:root[data-theme="light"] select.m-POST,:root[data-theme="light"] select.mode-fixme{color:#4B3FC4;}
+  :root[data-theme="light"] .grid th,:root[data-theme="light"] .grid tfoot td{background:#F7F7FA;}
+  :root[data-theme="light"] .grid tbody tr:hover td{background:rgba(15,15,40,.025);}
+  :root[data-theme="light"] .cell:hover:not([readonly]){background:rgba(15,15,40,.04);}
+  :root[data-theme="light"] .cell:focus{background:#fff;}
+  :root[data-theme="light"] .cell[readonly]{color:#7A7C8A;}
+  :root[data-theme="light"] .cell::placeholder{color:#9A9AAA;}
+  :root[data-theme="light"] select.cell option{background:#fff;color:#0B0B14;}
+  :root[data-theme="light"] .banner{color:#7A4E00;}
+  :root[data-theme="light"] .node::before{background:rgba(15,15,40,.12);}
+  :root[data-theme="light"] .dot{box-shadow:0 0 0 3px #fff;}
+  :root[data-theme="light"] .node.done .nst{color:#15803D;}
+  :root[data-theme="light"] .node.active .nst,:root[data-theme="light"] .node.new .nst{color:#4B3FC4;}
+  :root[data-theme="light"] .node.base .dot{background:#6B6D7A;}
+  :root[data-theme="light"] .lock{background:rgba(255,255,255,.85);border-color:rgba(15,15,40,.1);
+    box-shadow:0 1px 2px rgba(20,20,50,.05),0 30px 70px -30px rgba(25,25,70,.3),0 0 60px -25px hsl(var(--accent)/.3);}
+  :root[data-theme="light"] .toast{background:#fff;box-shadow:0 12px 40px -10px rgba(25,25,70,.3);}
+  :root[data-theme="light"] .toast button{color:#4B3FC4;}
+  :root[data-theme="light"] .sec-form input{background:#fff;color:#0B0B14;}
+  :root[data-theme="light"] .qr{border:1px solid var(--hair);}
+  :root[data-theme="light"] .warnbox,:root[data-theme="light"] .acct-warn{color:#7A4E00;}
+  :root[data-theme="light"] button.avatar{box-shadow:0 0 0 2px #fff,0 0 0 3px hsl(var(--accent)/.5);}
+  :root[data-theme="light"] button.avatar:hover,:root[data-theme="light"] button.avatar[aria-expanded="true"]{box-shadow:0 0 0 2px #fff,0 0 0 3px hsl(var(--accent));}
+  :root[data-theme="light"] .acct{background:rgba(255,255,255,.96);border-color:rgba(15,15,40,.1);box-shadow:0 24px 60px -16px rgba(25,25,70,.3);}
+  :root[data-theme="light"] .acct-item{color:#2A2A3A;}
+  :root[data-theme="light"] .acct-item:hover,:root[data-theme="light"] .acct-item:focus-visible{background:rgba(15,15,40,.05);color:#0B0B14;}
+  :root[data-theme="light"] .acct-item.danger:hover,:root[data-theme="light"] .acct-item.danger:focus-visible{color:#C43D3D;}

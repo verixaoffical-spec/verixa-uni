@@ -301,7 +301,7 @@ export default function RiskView({ hidden, link, hook, onGoConnect }: Props) {
   ];
 
   return (
-    <section hidden={hidden} className="workspace">
+    <section hidden={hidden} className="workspace risk">
       <article className="card">
         <header className="head">
           <h1>Risk Analysis</h1>

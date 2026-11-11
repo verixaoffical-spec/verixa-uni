@@ -34,7 +34,7 @@
     border:1px solid var(--mock-line);box-shadow:0 50px 140px -30px hsl(var(--accent)/.45),0 0 0 1px rgba(255,255,255,.04);
     transform-style:preserve-3d;transform-origin:center top;will-change:transform;}
   .dash-fade{position:absolute;left:0;right:0;bottom:0;height:220px;z-index:30;pointer-events:none;background:linear-gradient(to top,var(--bg),transparent);}
-  /* The picture is the dark product in both themes, like a screenshot */
+  /* The picture of the product. Dark here, and drawn light in the light theme (below the mock rules) */
   .mock-window{display:flex;flex-direction:column;height:100%;font-size:12px;color:#fff;text-align:left;font-variant-numeric:tabular-nums;
     background:radial-gradient(ellipse 70% 50% at 70% -10%,hsl(var(--accent)/.14),transparent 60%),#09090b;}
   .mock-window svg{width:13px;height:13px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
@@ -127,6 +127,41 @@
   @keyframes mock-pulse{50%{opacity:.45;}}
   @keyframes mock-flow{to{background-position:-200% 0;}}
 
+  /* The picture in the light theme: the same product, drawn light. The dark theme above is unchanged */
+  :root[data-theme="light"] .dash-panel{--mock-line:rgba(15,15,40,.1);box-shadow:0 50px 120px -40px hsl(var(--accent)/.35),0 0 0 1px rgba(15,15,40,.04);}
+  :root[data-theme="light"] .mock-window{color:#0B0B14;background:radial-gradient(ellipse 70% 50% at 70% -10%,hsl(var(--accent)/.1),transparent 60%),#fff;}
+  :root[data-theme="light"] .mock-chrome{background:#F7F7FA;}
+  :root[data-theme="light"] .mock-search{color:#6B6D7A;background:rgba(15,15,40,.03);}
+  :root[data-theme="light"] .mock-search kbd{color:#6B6D7A;background:rgba(15,15,40,.05);}
+  :root[data-theme="light"] .mock-integ{color:#45475A;background:rgba(15,15,40,.03);}
+  :root[data-theme="light"] .mock-sidebar{background:#F7F7FA;}
+  :root[data-theme="light"] .mock-nav-label{color:#8A8A9A;}
+  :root[data-theme="light"] .mock-nav-item{color:#55576A;}
+  :root[data-theme="light"] .mock-nav-item svg{color:#8A8A9A;}
+  :root[data-theme="light"] .mock-nav-item.active{color:#0B0B14;background:linear-gradient(90deg,hsl(var(--accent)/.18),hsl(var(--accent)/.05));box-shadow:inset 0 0 0 1px hsl(var(--accent)/.25);}
+  :root[data-theme="light"] .mock-nav-item.active svg{color:#4B3FC4;}
+  :root[data-theme="light"] .mock-avatar,:root[data-theme="light"] .mock-pr-avatar{color:#fff;}
+  :root[data-theme="light"] .mock-fname{color:#1F1F2E;}
+  :root[data-theme="light"] .mock-frole,:root[data-theme="light"] .mock-sub,:root[data-theme="light"] .mock-stat-label{color:#6B6D7A;}
+  :root[data-theme="light"] .mock-stat,:root[data-theme="light"] .mock-card{background:#fff;box-shadow:0 1px 2px rgba(20,20,50,.05),0 8px 20px -14px rgba(20,20,50,.18);}
+  :root[data-theme="light"] .mock-stat.accent .mock-stat-value{color:hsl(174 75% 30%);}
+  :root[data-theme="light"] .mock-stat-delta,:root[data-theme="light"] .mock-badge.low,:root[data-theme="light"] .mock-status.done,
+  :root[data-theme="light"] .mock-feed-head span{color:#15803D;}
+  :root[data-theme="light"] .mock-table th{color:#8A8A9A;}
+  :root[data-theme="light"] .mock-table td{border-bottom-color:rgba(15,15,40,.06);}
+  :root[data-theme="light"] .mock-pr-avatar{box-shadow:0 0 0 2px #fff;}
+  :root[data-theme="light"] .mock-pr-title,:root[data-theme="light"] .mock-feed-head,:root[data-theme="light"] .mock-event b{color:#1F1F2E;}
+  :root[data-theme="light"] .mock-pr-title b,:root[data-theme="light"] .mock-pr-meta{color:#6B6D7A;}
+  :root[data-theme="light"] .mock-badge.med,:root[data-theme="light"] .mock-status.look{color:#A35F00;}
+  :root[data-theme="light"] .mock-badge.high{color:#C43D3D;}
+  :root[data-theme="light"] .mock-progress{background:rgba(15,15,40,.08);}
+  :root[data-theme="light"] .mock-progress span{background:#22A066;}
+  :root[data-theme="light"] .mock-status.run{color:#4B3FC4;}
+  :root[data-theme="light"] .mock-event{color:#55576A;}
+  :root[data-theme="light"] .mock-event i{background:#C9C9D4;}
+  :root[data-theme="light"] .mock-event.ok i{background:#22A066;}
+  :root[data-theme="light"] .mock-event small{color:#8A8A9A;}
+
   /* ---------- video ---------- */
   .video-frame{padding:8px;border-radius:20px;background:var(--bg-raised);border:1px solid var(--line);box-shadow:var(--shadow),0 0 120px -40px var(--glow);}
   .video-box{position:relative;aspect-ratio:16/9;border-radius:13px;overflow:hidden;background:#000;}
@@ -172,6 +207,7 @@
   .steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;list-style:none;}
   .step{position:relative;padding:28px;border-radius:18px;background:var(--bg-raised);border:1px solid var(--line);box-shadow:var(--card-shadow);}
   .step-num{font:500 13px 'JetBrains Mono',monospace;color:hsl(var(--accent-2));}
+  :root[data-theme="light"] .step-num{color:hsl(174 75% 28%);}
 
   /* ---------- reviews: plays like a short ad ---------- */
   .reviews{position:relative;isolation:isolate;overflow:hidden;max-width:900px;margin:0 auto;padding:54px clamp(20px,6vw,72px) 30px;

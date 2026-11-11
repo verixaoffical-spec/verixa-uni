@@ -22,3 +22,15 @@ table{width:100%;min-width:480px;border-collapse:collapse;font-size:14.5px;}
 th,td{padding:11px 13px;text-align:left;vertical-align:top;border:1px solid rgba(255,255,255,.11);}
 th{color:#fff;font-weight:600;background:rgba(255,255,255,.04);}
 .end{margin-top:46px;padding-top:20px;border-top:1px solid rgba(255,255,255,.11);display:flex;flex-wrap:wrap;gap:8px 20px;font-size:14px;}
+
+/* Light theme, when it was chosen on the site. Dark stays the default */
+:root[data-theme="light"]{color-scheme:light;}
+:root[data-theme="light"] body{background:#F6F6FA;color:#3A3A4C;}
+:root[data-theme="light"] a{color:#4B3FC4;}
+:root[data-theme="light"] a:hover,:root[data-theme="light"] .brand,:root[data-theme="light"] h1,:root[data-theme="light"] h2,:root[data-theme="light"] b,:root[data-theme="light"] th{color:#0A0A14;}
+:root[data-theme="light"] h1 em{background:linear-gradient(100deg,hsl(249 70% 58%),hsl(262 66% 55%) 50%,hsl(174 75% 34%));-webkit-background-clip:text;background-clip:text;color:transparent;}
+:root[data-theme="light"] :focus-visible{outline-color:#4B3FC4;}
+:root[data-theme="light"] .date{color:#6B6D7A;}
+:root[data-theme="light"] th,:root[data-theme="light"] td{border-color:rgba(15,15,40,.12);}
+:root[data-theme="light"] th{background:rgba(15,15,40,.04);}
+:root[data-theme="light"] .end{border-top-color:rgba(15,15,40,.12);}

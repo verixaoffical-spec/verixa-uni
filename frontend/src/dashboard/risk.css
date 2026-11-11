@@ -3,6 +3,10 @@
      (src/landing/landing.css, .mock-badge / .mock-stat / .mock-table), rebuilt here against the
      dashboard's own tokens and fed by real Analysis Agent output instead of hardcoded rows. */
 
+  /* Risk Analysis has no side panel, so its card takes the whole width instead of leaving the right column empty */
+  .workspace.risk{grid-template-columns:minmax(0,1fr);}
+  .workspace.risk .card{min-height:0;}
+
   .risk-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px;}
   .risk-stat{padding:12px 14px;border-radius:12px;border:1px solid var(--hair);background:var(--soft);}
   .risk-stat-label{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:hsl(var(--muted-foreground));}
@@ -105,3 +109,15 @@
   .rconcern h4{color:var(--warn);}
   .rconcern p{font-size:13px;color:#e8dcc8;line-height:1.5;}
   .rconcern .rconcern-note{margin-top:6px;font-size:11.5px;color:hsl(var(--muted-foreground));}
+
+  /* ---------- light theme ---------- */
+  :root[data-theme="light"] .risk-stat.low .risk-stat-value,:root[data-theme="light"] .rbadge.low,:root[data-theme="light"] .rstate.scored{color:#15803D;}
+  :root[data-theme="light"] .rstate.running,:root[data-theme="light"] .rstate.queued,:root[data-theme="light"] .rareas li span{color:#4B3FC4;}
+  :root[data-theme="light"] .rpr-title{color:#0B0B14;}
+  :root[data-theme="light"] .risk-grid td.rscore,:root[data-theme="light"] .rfactors li,:root[data-theme="light"] .rareas li,:root[data-theme="light"] .live-steps li{color:#33334A;}
+  :root[data-theme="light"] .rreason{color:#2A2A3A;}
+  :root[data-theme="light"] .rerr{color:#8F1D1D;}
+  :root[data-theme="light"] .risk-ask input{color:#0B0B14;background:#fff;}
+  :root[data-theme="light"] .live-close:hover,:root[data-theme="light"] .live-steps li.current{color:#0B0B14;}
+  :root[data-theme="light"] .live-steps li.ok::before{background:#15803D;}
+  :root[data-theme="light"] .rconcern p{color:#5A4300;}

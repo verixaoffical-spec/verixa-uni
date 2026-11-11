@@ -34,7 +34,7 @@ function ThemeToggle() {
   );
 }
 
-// The log in and sign up page is dark only, so the theme switch shows on the landing page alone
+// The theme switch shows on the landing page and on the log in and sign up page
 export default function Navbar({ current, onAuthLink }: Props) {
   return (
     <header className="nav-wrap">
@@ -47,7 +47,7 @@ export default function Navbar({ current, onAuthLink }: Props) {
           {LINKS.map(l => <a key={l.href} href={l.href}>{l.label}</a>)}
         </div>
         <div className="nav-actions">
-          {!current && <ThemeToggle />}
+          <ThemeToggle />
           <a className="btn ghost" href="/login" aria-current={current === 'login' ? 'page' : undefined}
              onClick={e => onAuthLink?.(e, 'login')}>Log in</a>
           <a className="btn solid" href="/signup" aria-current={current === 'signup' ? 'page' : undefined}

@@ -1,4 +1,5 @@
 """The Privacy Policy and Terms of Service are public pages, and their claims match the code."""
+import re
 import unittest
 
 from fastapi.testclient import TestClient
@@ -20,9 +21,13 @@ class LegalPageTests(unittest.TestCase):
             self.assertIn("verixa.offical@gmail.com", answer.text)
             self.assertIn("Content-Security-Policy", answer.headers)
 
-    def test_pages_run_no_script_so_the_security_policy_allows_them(self):
+    def test_pages_run_only_our_own_script_files_so_the_security_policy_allows_them(self):
+        """The policy allows script files from this site and refuses scripts written inside the page."""
         for path in ("/privacy", "/terms"):
-            self.assertNotIn("<script", self.client.get(path).text)
+            scripts = re.findall(r"<script\b([^>]*)>", self.client.get(path).text)
+            self.assertTrue(scripts, path)
+            for attrs in scripts:
+                self.assertRegex(attrs, r'src="/assets/[\w.-]+\.js"', path)
 
     def test_no_atlassian_account_id_is_stored(self):
         """The Privacy Policy promises this. If a column like it is added, the policy must change too."""

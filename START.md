@@ -105,10 +105,26 @@ Open <http://localhost:8000/login> and log in with `demo@verixa.dev` and the pas
 The sample pull requests and Test Library work here. **Analyse now** and **Link again** do not, because the demo has no
 real GitHub sign in. Close this window when you finish, so its settings do not affect a normal run.
 
+## Forgot password emails
+
+The reset link is sent by email through Gmail. Add these to `.env` and restart the app, because `.env` is only read at start.
+For Gmail, turn on 2-Step Verification, create an App Password, and use that instead of your normal password:
+
+```text
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=you@gmail.com
+SMTP_PASSWORD=your-16-letter-app-password
+MAIL_FROM=Verixa <you@gmail.com>
+```
+
+Without `SMTP_HOST`, no email is sent, and the reset link is printed in the app's window instead. That is only for trying it on
+your own computer.
+
 ## Run the tests
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest tests.test_validators tests.test_library tests.test_accounts tests.test_crud tests.test_twofactor tests.test_risk_rules tests.test_analysis_integration tests.test_qa_security tests.test_risk_eval tests.test_github_refresh tests.test_legal_pages
+.\.venv\Scripts\python.exe -m unittest tests.test_validators tests.test_library tests.test_accounts tests.test_crud tests.test_twofactor tests.test_risk_rules tests.test_analysis_integration tests.test_qa_security tests.test_risk_eval tests.test_github_refresh tests.test_legal_pages tests.test_password_reset tests.test_live tests.test_ci_check tests.test_agent_fixes tests.test_manager_matching
 ```
 
 The tests use their own temporary database and take about 3 minutes. For more cases to try by hand, see

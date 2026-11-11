@@ -193,6 +193,48 @@
   .forgot a{color:var(--muted);transition:color .2s;}
   .forgot a:hover{color:#fff;}
   .submit.as-link{display:grid;place-items:center;margin-top:24px;}
+
+  /* ---------- light theme: the same page on a white background. Dark stays the default ---------- */
+  :root[data-theme="light"]{--bad:#C43D3D;--bad-soft:#B42318;--hair:rgba(15,15,40,.09);color-scheme:light;}
+  :root[data-theme="light"],:root[data-theme="light"] body{background:#F6F6FA;}
+  :root[data-theme="light"] .scene .grid{background-image:linear-gradient(rgba(15,15,40,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(15,15,40,.05) 1px,transparent 1px);}
+  :root[data-theme="light"] .orb{opacity:.45;}
+  :root[data-theme="light"] .hex{opacity:.35;}
+  :root[data-theme="light"] .noise{opacity:.025;}
+  :root[data-theme="light"] .glass{
+    background:radial-gradient(420px circle at var(--mx) var(--my),rgba(108,92,231,.06),transparent 45%),rgba(255,255,255,.82);
+    box-shadow:0 1px 2px rgba(20,20,50,.06),0 30px 70px -28px rgba(25,25,70,.28),0 0 0 1px rgba(15,15,40,.08);}
+  :root[data-theme="light"] .glass::before{background:linear-gradient(180deg,rgba(255,255,255,.9),rgba(15,15,40,.06) 30%,rgba(15,15,40,.04) 70%,rgba(15,15,40,.08));}
+  :root[data-theme="light"] .seg{background:rgba(15,15,40,.05);box-shadow:inset 0 1px 2px rgba(15,15,40,.06);}
+  :root[data-theme="light"] .seg a[aria-selected="true"],:root[data-theme="light"] .seg a:hover{color:#0A0A14;}
+  :root[data-theme="light"] .seg-lamp{background:#fff;box-shadow:0 1px 2px rgba(15,15,40,.12),0 4px 12px -4px rgba(15,15,40,.15);}
+  :root[data-theme="light"] h1 em{background-image:linear-gradient(100deg,hsl(249 70% 58%),hsl(262 66% 55%) 50%,hsl(174 75% 34%));}
+  :root[data-theme="light"] .banner{color:#9F1F1F;background:rgba(196,61,61,.06);border-color:rgba(196,61,61,.25);}
+  :root[data-theme="light"] .banner.info{color:#3B2FA8;background:hsl(249 76% 66%/.08);border-color:hsl(249 76% 66%/.3);}
+  :root[data-theme="light"] .oauth{color:#0A0A14;background:#fff;border-color:rgba(15,15,40,.12);box-shadow:0 1px 2px rgba(15,15,40,.06);}
+  :root[data-theme="light"] .oauth:hover{background:#F4F4F8;border-color:rgba(15,15,40,.2);}
+  :root[data-theme="light"] .or::before,:root[data-theme="light"] .or::after{background:linear-gradient(90deg,transparent,rgba(15,15,40,.14),transparent);}
+  :root[data-theme="light"] .field label{color:#33334A;}
+  :root[data-theme="light"] .control input{background:#fff;border-color:rgba(15,15,40,.14);color:#0A0A14;box-shadow:inset 0 1px 2px rgba(15,15,40,.04);}
+  :root[data-theme="light"] .control input::placeholder{color:rgba(15,15,40,.35);}
+  :root[data-theme="light"] .control input:hover{border-color:rgba(15,15,40,.24);}
+  :root[data-theme="light"] .control input:focus{background:#fff;border-color:hsl(var(--accent)/.75);box-shadow:0 0 0 4px hsl(var(--accent)/.16);}
+  :root[data-theme="light"] .control input[aria-invalid="true"]{border-color:rgba(196,61,61,.6);}
+  :root[data-theme="light"] .control input:-webkit-autofill{-webkit-text-fill-color:#0A0A14;caret-color:#0A0A14;}
+  :root[data-theme="light"] .eye:hover{color:#0A0A14;background:rgba(15,15,40,.05);}
+  :root[data-theme="light"] .err button{color:#4B3FC4;}
+  :root[data-theme="light"] .caps{color:#8A5A00;}
+  :root[data-theme="light"] .meter i{background:rgba(15,15,40,.1);}
+  :root[data-theme="light"] .rules li.ok{color:#33334A;}
+  :root[data-theme="light"] .rules li::before{background:rgba(15,15,40,.2);}
+  :root[data-theme="light"] .meter[data-score="2"]~.rules .strength{color:#A35F00;}
+  :root[data-theme="light"] .meter[data-score="3"]~.rules .strength{color:#4B3FC4;}
+  :root[data-theme="light"] .meter[data-score="4"]~.rules .strength{color:#15803D;}
+  :root[data-theme="light"] .switch a,:root[data-theme="light"] .linkish{color:#0A0A14;}
+  :root[data-theme="light"] .switch a:hover,:root[data-theme="light"] .linkish:hover{border-color:#0A0A14;}
+  :root[data-theme="light"] .linkish.quiet{color:var(--muted);}
+  :root[data-theme="light"] .linkish.quiet:hover,:root[data-theme="light"] .forgot a:hover{color:#0A0A14;}
+  @media (prefers-reduced-transparency:reduce){:root[data-theme="light"] .glass{background:#fff;}}
   .swap > .submit{width:100%;}
 
   .fine{display:flex;align-items:center;gap:7px;margin-top:22px;font-size:12px;color:var(--faint);}
