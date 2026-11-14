@@ -26,7 +26,7 @@ Agar waqt kam ho, to sirf yeh section parh lein.
 | Tool | Yeh kya hai | Hum ne kyun liya |
 |---|---|---|
 | **React 18** | Website ki screens banane ki JavaScript library | Screen ko **components** mein banate hain: button, table, form, sab alag alag tukre. Ek tukra ek dafa banao, kai jagah use karo. Data badle to sirf woh hissa update hota hai, poora page reload nahi hota |
-| **TypeScript** | JavaScript, jis mein har cheez ki "type" likhi hoti hai | Galtiyan code chalne se **pehle** pakri jati hain. Misaal: number ki jagah text bhej diya, to editor foran bata deta hai |
+| **TypeScript** | JavaScript, jis mein har cheez ki "type" likhi hoti hai | Galtiyan code chalne se **pehle** pakri jati hain, likhte waqt editor mein aur build (`tsc`) par, **runtime par nahi**. Misaal: developer ne number ki jagah text bhej diya, to editor foran bata deta hai. User ka galat data runtime par check karna backend (Pydantic) aur hamare validators ka kaam hai |
 | **Vite** | Frontend ko build aur chalane ka tool | Bohat tez hai, aur React aur TypeScript ko browser ke samajhne wali files mein badal deta hai |
 | **Python** | Programming language | AI agents aur AI libraries sab se zyada Python mein milti hain, is liye backend bhi Python mein rakha. Poora server ek hi language mein |
 | **FastAPI** | **Python** ka web framework, yaani server banane ka tool | Tez hai. Aane wala data khud check karta hai, misaal: email sahi format mein hai ya nahi. Webhook ka lamba kaam background mein kar sakta hai, aur WebSocket support karta hai |
@@ -39,7 +39,7 @@ Agar waqt kam ho, to sirf yeh section parh lein.
 | **GitHub OAuth, API, webhooks** | GitHub se login, data parhna, aur GitHub ki khabar | "Continue with GitHub" login, PR ki files parhna, aur PR khulte hi GitHub khud Verixa ko batata hai |
 | **Atlassian OAuth (Jira)** | Jira se judne ka tareeqa | User apna Jira project chunta hai. Tickets banana agle deliverable mein hai |
 | **WebSocket** | Browser (dashboard) aur hamare backend server (FastAPI) ke beech hamesha khula raasta, `/api/live` par | Agent ka har step backend khud browser ko bhej deta hai, is liye screen foran update hoti hai aur page refresh nahi karna parta |
-| **scrypt, Fernet, signed cookies, pyotp** | Security ki libraries | Password ka hash, tokens ko encrypt karna, login cookie ko jaali banne se rokna, aur 2FA ke 6 digit codes |
+| **scrypt, Fernet, signed cookies, pyotp** | Security ke tools. **scrypt** Python ke andar (`hashlib`) hai, **Fernet** `cryptography` library ka hissa hai, **signed cookies** `itsdangerous` se (Starlette ka SessionMiddleware), aur **pyotp** alag library hai. QR code `segno` banata hai | scrypt password ka hash banata hai, Fernet tokens aur 2FA secret encrypt karta hai, signed cookie login ko jaali banne se rokti hai, aur pyotp 2FA ke 6 digit codes banata aur check karta hai |
 | **SMTP (Gmail)** | Email bhejne ka tareeqa | Forgot password ka link bhejna |
 | **ngrok** | Laptop ko internet par ek public address deta hai | GitHub ka webhook laptop par chalti app tak pohanch sake |
 | **unittest, Playwright** | Testing tools | `unittest` code ke tests chalata hai. Playwright asli browser khol kar click kar ke check karta hai |
@@ -365,6 +365,62 @@ For more detail on any of this, see [README_SIMPLE.md](README_SIMPLE.md) and [AG
 ## 11. Your questions
 
 New questions get added here as you ask them.
+
+### Google ADK kyun, LangGraph kyun nahi?
+
+README mein team ka faisla likha nahi. Code se jo saaf hai:
+
+- **ADK kahan use hua:** `AnalysisManager` aur `AnalysisAgent` ADK ke `BaseAgent` se bane hain (`agents/manager.py`, `agents/analysis.py`).
+  ADK ka `Runner` unhein chalata hai, aur `LiteLlm` (`agents/models.py`) se Groq ka model juda hai.
+- **Runner, session, events ka matlab** (`agents/runner.py`):
+  - **Runner:** woh "start button" jo Manager ko chalata hai aur jab tak kaam khatam na ho, saare agents ko baari baari chalne deta hai.
+  - **Session:** har PR ke liye ek alag khaali "file", taake do PRs ka kaam aapas mein na mile. Hamare yahan yeh memory mein banta hai
+    (`InMemorySessionService`), aur data hum zyada tar apni `ANALYSES` dictionary mein rakhte hain.
+  - **Events:** har agent apne har qadam par ek chhota message deta hai, jaise "rejected, attempt 1 of 3". Runner inhein aage deta hai.
+  - Screen par live updates in events se nahi, hamare apne trace log se aate hain (`agents/trace.py`, `backend/live.py`).
+- **Kyun theek baitha:** hamara flow seedha hai: Manager kaam deta hai, Analysis Agent karta hai, Manager check karke 3 dafa tak dobara
+  poochta hai. ADK mein "ek agent doosre ko chalaye" wala structure, events aur session pehle se bane hain, aur LiteLLM se model badalna aasan hai.
+- **LangGraph:** graph ki shakal mein bohat saare raaste aur branches banane ke liye acha hai. Hamare simple loop ke liye utni zaroorat nahi
+  thi, aur LangChain ka bara setup bhi saath aata.
+
+**Mentor ke liye ek line:** "Hamara flow Manager se Worker tak seedha loop hai. ADK mein agent hierarchy, runner aur events pehle se hain,
+aur LiteLLM se kisi bhi model par chal jata hai. LangGraph complex branching ke liye behtar hai, jo hamein abhi nahi chahiye."
+
+### Webhook aane par pehle Manager chalta hai ya Analysis Agent?
+
+**Pehle Manager.** Analysis Agent ko kabhi seedha nahi bulaya jata.
+
+```text
+GitHub webhook --> main.py --> analysis_service.py --> runner.py --> Manager (root_agent) --> Analysis Agent
+```
+
+Runner ka `root_agent` Manager hai (`agents/manager.py`). Manager Analysis Agent ko kaam deta hai, jawab check karta hai, aur zaroorat ho to 3
+dafa tak dobara poochta hai. Analysis Agent sirf Manager ke kehne par chalta hai.
+
+### Trace aur log mein kya farq hai?
+
+| | Log | Trace |
+|---|---|---|
+| Kya hai | Server ki aam diary: kaun sa page khula, kya error aaya | Ek PR ke analysis ki **qadam ba qadam kahani** |
+| Misaal | `"POST /webhooks/github HTTP/1.1" 202 Accepted` | `run.start`, `github.pr_read`, `rules.scored`, `manager.decided` |
+| Kahan | Server ki terminal window | `logs/agent_trace.jsonl` aur terminal, aur screen ke live updates bhi isi se |
+| Pehchan | Har line alag | Har line par PR ka naam aur `run_id`, taake ek run ki saari lines jor kar parhi ja sakein |
+| Kis liye | Server theek chal raha hai ya nahi | Kisi PR ko yeh label kyun mila, kaun sa model chala, kahan fail hua |
+
+Trace parhne ke liye: `python scripts/agent_trace.py`. Trace mein tokens kabhi nahi likhe jate, aur key jaisi cheez chhupa di jati hai.
+
+### Kya Playwright MCP use ho raha hai?
+
+**Nahi.** Verixa mein kahin bhi Playwright MCP nahi hai.
+
+| Playwright kahan aata hai | Kaise |
+|---|---|
+| Test Library | User apni `.spec.ts` files upload karta hai. Verixa sirf check karke save karta hai, **chalata nahi** |
+| Hamari apni testing | `tests/e2e` mein Playwright library se browser chala kar Verixa ko test kiya. Yeh MCP nahi, seedha library hai |
+| Agle deliverable | Test and Execution Agent upload kiye gaye tests chalayega. Yeh abhi bana nahi |
+
+**MCP kya hota:** ek tareeqa jis se AI model khud browser chalata hai, jaise click karna aur page parhna. Hamare agents browser nahi chalate,
+sirf GitHub se PR parhte hain.
 
 ### OTP kyun nahi kiya, 2FA kyun kiya?
 

@@ -1,0 +1,97 @@
+{
+  "info": {
+    "name": "JSONPlaceholder API",
+    "description": "Sample collection for the Verixa Test Library. Calls the free public API at jsonplaceholder.typicode.com.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://jsonplaceholder.typicode.com" }
+  ],
+  "item": [
+    {
+      "name": "Posts",
+      "item": [
+        {
+          "name": "List posts",
+          "request": { "method": "GET", "url": "{{baseUrl}}/posts" },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('returns 100 posts', () => pm.expect(pm.response.json()).to.have.lengthOf(100));"
+            ] }
+          }]
+        },
+        {
+          "name": "Get one post",
+          "request": { "method": "GET", "url": "{{baseUrl}}/posts/1" },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('post has id 1', () => pm.expect(pm.response.json().id).to.eql(1));"
+            ] }
+          }]
+        },
+        {
+          "name": "Create a post",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/posts",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Verixa\",\n  \"body\": \"Tests that run on every pull request\",\n  \"userId\": 1\n}" }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('status is 201', () => pm.response.to.have.status(201));",
+              "pm.test('echoes the title', () => pm.expect(pm.response.json().title).to.eql('Verixa'));"
+            ] }
+          }]
+        },
+        {
+          "name": "Update a post",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/posts/1",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Updated by Verixa\"\n}" }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('title changed', () => pm.expect(pm.response.json().title).to.eql('Updated by Verixa'));"
+            ] }
+          }]
+        },
+        {
+          "name": "Delete a post",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/posts/1" },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));"
+            ] }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get one user",
+          "request": { "method": "GET", "url": "{{baseUrl}}/users/1" },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('user has an email', () => pm.expect(pm.response.json().email).to.include('@'));"
+            ] }
+          }]
+        }
+      ]
+    }
+  ]
+}
