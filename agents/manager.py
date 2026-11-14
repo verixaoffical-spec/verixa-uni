@@ -1,6 +1,7 @@
 """Manager of the analysis phase (Google ADK). It hands the PR to the Analysis Agent, validates the
 output with plain code, and retries with feedback. After MAX_ATTEMPTS the PR goes to human review.
 This is also the root agent for `adk web`: send it "Analyze owner/repo#12"."""
+import os
 import re
 from typing import AsyncGenerator
 
@@ -13,7 +14,7 @@ from .events import text_event
 from .llm import parse_json
 from .trace import trace
 
-MAX_ATTEMPTS = 3
+MAX_ATTEMPTS = max(1, int(os.getenv("AGENT_MAX_ATTEMPTS", "3")))  # TBD3, the same limit for every agent
 LABELS = ["Low", "Medium", "High"]
 # Words that say nothing about which change is being described, so they do not count as a match.
 GENERIC_WORDS = {"this", "that", "with", "from", "have", "been", "will", "they", "their", "only", "file", "files", "code",

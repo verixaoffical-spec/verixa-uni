@@ -9,7 +9,7 @@
  * shows its real state (queued, running, needs review, failed), never a placeholder label.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, api, openLive, type Assessment, type LiveEvent, type RiskFeed, type RiskLabel } from './api';
+import { ApiError, api, openLive, qa, type Assessment, type LiveEvent, type RiskFeed, type RiskLabel } from './api';
 import { icons } from './icons';
 import { Chip, hookLabel, type HookState, type Link } from './connection';
 import { useToast } from './Toast';
@@ -18,7 +18,9 @@ interface Props {
   hidden: boolean;
   link: Link | null;
   hook: HookState;
+  staging: string | null;
   onGoConnect: () => void;
+  onRunStarted: (runId: number) => void;
 }
 
 // The mock-up used low / med / high as class names. Map the agent's labels onto them.
@@ -43,7 +45,7 @@ interface LiveRun {
 
 function addLive(runs: LiveRun[], event: LiveEvent): LiveRun[] {
   const current = runs.find(r => r.pr === event.pr);
-  const startsNew = event.event === 'service.delivery' || event.event === 'run.start';
+  const startsNew = event.event === 'service.delivery' || event.event === 'run.start' || event.event === 'qa.start';
   // A message after a finished run starts a new one, unless it is a replay of what is already shown
   if (!current || (current.done && startsNew && !current.messages.some(m => m.at === event.at && m.event === event.event))) {
     const fresh = { pr: event.pr, messages: [event], done: event.done, finishedAt: event.done ? Date.now() : 0 };
@@ -128,7 +130,7 @@ function Detail({ row }: { row: Assessment }) {
   const raised = row.base_label && row.risk_label && row.base_label !== row.risk_label;
   return (
     <tr>
-      <td className="rdetail" colSpan={5}>
+      <td className="rdetail" colSpan={6}>
         <div className="rdetail-in">
           {!!row.errors.length && (
             <div className="rerr">
@@ -193,13 +195,32 @@ function Detail({ row }: { row: Assessment }) {
   );
 }
 
-export default function RiskView({ hidden, link, hook, onGoConnect }: Props) {
+export default function RiskView({ hidden, link, hook, staging, onGoConnect, onRunStarted }: Props) {
   const toast = useToast();
   const [feed, setFeed] = useState<RiskFeed | null>(null);
   const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
   const [prNumber, setPrNumber] = useState('');
   const [busy, setBusy] = useState(false);
+  const [starting, setStarting] = useState<number | null>(null);
+
+  // Run Now (Req 4.1): the only way tests start. The run goes on in the background and opens on Test Runs.
+  async function runNow(row: Assessment) {
+    if (!staging) {
+      toast('Add the staging address on Integrations first. Tests never run on the live system', { label: 'Open Integrations', run: onGoConnect });
+      return;
+    }
+    setStarting(row.id);
+    try {
+      const run = await qa.runNow(row.id);
+      toast(`Run #${run.id} started for PR #${row.pr_number}`);
+      onRunStarted(run.id);
+    } catch (err) {
+      toast((err instanceof ApiError ? err.message : 'The run could not be started').slice(0, 200));
+    } finally {
+      setStarting(null);
+    }
+  }
 
   const load = useCallback(async (): Promise<RiskFeed | null> => {
     try {
@@ -291,7 +312,9 @@ export default function RiskView({ hidden, link, hook, onGoConnect }: Props) {
     }
   }
 
-  const items = feed?.items ?? [];
+  // High risk first, then newest (Req 3.7). The server sends newest first, and sort keeps that order within a label.
+  const RANK: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+  const items = [...(feed?.items ?? [])].sort((a, b) => (RANK[a.risk_label ?? ''] ?? 3) - (RANK[b.risk_label ?? ''] ?? 3));
   const counts = feed?.counts ?? {};
   const tiles: { key: RiskLabel | 'total'; cls: string; label: string; icon: typeof icons.bolt; sub: string }[] = [
     { key: 'total', cls: '', label: 'Pull requests', icon: icons.pullRequests, sub: 'seen by the agent' },
@@ -376,6 +399,7 @@ export default function RiskView({ hidden, link, hook, onGoConnect }: Props) {
                   <th className="rscore">Score</th>
                   <th>State</th>
                   <th className="ract">Analysed</th>
+                  <th className="ract">Tests</th>
                 </tr>
               </thead>
               {items.map(row => (
@@ -403,6 +427,13 @@ export default function RiskView({ hidden, link, hook, onGoConnect }: Props) {
                     <td className="rscore">{row.score ?? '—'}</td>
                     <td><StateBadge state={row.state} /></td>
                     <td className="ract"><span className="muted">{ago(row.updated_at)}</span></td>
+                    <td className="ract">
+                      <button className="btn sm" disabled={starting !== null || row.state === 'queued' || row.state === 'running'}
+                              onClick={e => { e.stopPropagation(); runNow(row); }} onKeyDown={e => e.stopPropagation()}
+                              title={row.state === 'queued' || row.state === 'running' ? 'Wait until it is scored' : `Run the tests for PR #${row.pr_number} on staging`}>
+                        {starting === row.id ? 'Starting…' : <>{icons.play} Run Now</>}
+                      </button>
+                    </td>
                   </tr>
                   {open === row.id && <Detail row={row} />}
                 </tbody>

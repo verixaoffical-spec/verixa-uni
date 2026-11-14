@@ -4,6 +4,7 @@ import App from './App';
 import { ToastProvider } from './Toast';
 import './dashboard.css';
 import './risk.css';
+import './qa.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -16,7 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from agents.trace import add_listener
 
-from . import analysis_api, api, auth, email_verify, live, password_reset, profile, twofactor
+from . import analysis_api, api, auth, email_verify, live, password_reset, profile, qa_api, twofactor
 from .agent_db import init_agent_db
 from .analysis_service import HANDLED_ACTIONS, analyse_pull_request, apply_check_suite
 from .db import Project, SessionLocal, get_db, init_db, now
@@ -34,6 +34,11 @@ async def lifespan(app: FastAPI):
     init_db()        # the five tables this app owns
     init_agent_db()  # risk_assessments, owned by the Analysis Agent
     add_listener(live.hub.publish)  # agent steps are pushed to the dashboard over a WebSocket
+    from agents import analysis
+    from .memory import real_bugs_in_module
+    from .qa_service import recover_runs
+    analysis.MEMORY_DEFECTS = real_bugs_in_module  # QA Memory feeds the module's bug history (Req 8.5)
+    recover_runs()  # runs cut off by a restart are marked failed, not left running forever
     yield
 
 
@@ -146,6 +151,7 @@ def auth_file():
     return RedirectResponse(auth.LOGIN)
 app.include_router(api.router)
 app.include_router(analysis_api.router)
+app.include_router(qa_api.router)
 
 
 def mark_verified(repo: str) -> None:

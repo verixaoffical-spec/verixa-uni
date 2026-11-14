@@ -25,7 +25,7 @@ router = APIRouter()
 RECENT_SECONDS = 10 * 60  # a page opened during a run still sees how it started
 RECENT_MAX = 300
 QUEUE_MAX = 500           # a stalled browser drops messages instead of holding memory
-ATTEMPTS = 3
+ATTEMPTS = settings.agent_max_attempts
 
 
 def _pr(pr_id) -> tuple[str, int] | None:
@@ -85,8 +85,12 @@ def describe(line: dict) -> dict | None:
         text = "AI model answered. Analysis agent sent its output to the Manager agent"
     elif e == "manager.validated":
         accepted = f.get("accepted") in (True, "True", "true")
-        text, level = (("Manager agent verified the output", "ok") if accepted else
-                       (f"Manager agent rejected the output (attempt {f.get('attempt')} of {ATTEMPTS})", "warn"))
+        whose = {"test": "the Test agent's ", "test_draft": "the drafted test ", "report": "the Report agent's ",
+                 "fix": "the suggested fix "}.get(str(f.get("agent")), "the ")
+        text, level = ((f"Manager agent verified {whose}output", "ok") if accepted else
+                       (f"Manager agent rejected {whose}output (attempt {f.get('attempt')} of {ATTEMPTS})", "warn"))
+    elif e == "manager.gave_up":
+        text, level = "Manager agent flagged this for a human review after every attempt", "warn"
     elif e == "manager.retry":
         text = f"Analysis agent is doing the work again (attempt {f.get('next_attempt')} of {f.get('of') or ATTEMPTS})"
     elif e == "manager.decided":
@@ -108,6 +112,8 @@ def describe(line: dict) -> dict | None:
             text = "Saved. It needs a human review"
         elif state == "failed":
             text, level = "Saved as failed", "error"
+    elif e in ("qa.start", "qa.step"):  # the Test and Report agents, from backend/qa_service.py
+        text, level, done = str(f.get("text") or ""), str(f.get("level") or "info"), f.get("done") in (True, "True", "true")
     elif e == "service.failed":
         text, level, done = "The analysis failed", "error", True
     else:

@@ -16,6 +16,7 @@ from .integrations import (
     delete_webhook, ensure_webhook, github_access_token, list_jira_projects, list_repos, ping_webhook, webhook_url,
 )
 from .library import ApplyError, plan_apply
+from .qa_db import delete_project_data
 from .validators import MAX_SPECS
 
 router = APIRouter(prefix="/api")
@@ -51,6 +52,7 @@ def remove_project(db: Session, user: User) -> None:
     # The agent's risk assessments point at this project, so they go with it. Without this, both
     # disconnecting and deleting an account would hit a foreign key error.
     db.execute(delete(RiskAssessment).where(RiskAssessment.project_id == project.id))
+    delete_project_data(db, project.id)  # runs, evidence rows, drafts, tickets and QA Memory
     db.delete(project)
 
 
@@ -73,7 +75,7 @@ def session(request: Request, db: Session = Depends(get_db)):
         specs = db.scalars(select(SpecFile).where(SpecFile.project_id == project.id).order_by(SpecFile.name))
         out["project"] = {
             "repo": project.repo, "jira_key": project.jira_key, "jira_name": project.jira_name,
-            "webhook_verified": bool(project.webhook_verified_at),
+            "webhook_verified": bool(project.webhook_verified_at), "staging_url": project.staging_url,
         }
         out["specs"] = [{"name": s.name, "size": s.size, "text": s.content, "revision": s.revision} for s in specs]
         out["collection"] = collection and {

@@ -10,6 +10,9 @@ DEFAULT_CHAINS = {
     # PR analysis: explanation and test areas (the risk label itself is computed by rules)
     "analysis": ["groq/openai/gpt-oss-20b", "groq/openai/gpt-oss-120b",
                  "openrouter/qwen/qwen3-8b", "gemini/gemini-3.5-flash"],
+    # Report Agent: the likely cause of a failure and the ticket's steps (override with REPORT_MODELS)
+    "report": ["groq/openai/gpt-oss-120b", "groq/openai/gpt-oss-20b",
+               "openrouter/qwen/qwen3-8b", "gemini/gemini-3.5-flash"],
     # small and fast: decisions
     "select": ["groq/openai/gpt-oss-20b", "openrouter/qwen/qwen3-8b",
                "groq/openai/gpt-oss-120b", "gemini/gemini-3.5-flash"],

@@ -1,10 +1,17 @@
 import logging
+import os
+import sys
 from datetime import datetime, timezone
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text, UniqueConstraint, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from .settings import settings
+
+# The tests drop every table. Run without tests/__init__.py (for example `unittest discover -s tests`), they would
+# reach the real database in .env, so they refuse to start instead. Run them as: python -m unittest tests.test_crud ...
+if sys.argv and sys.argv[0].endswith("-m unittest") and os.environ.get("VERIXA_TEST_DB") != os.environ.get("DATABASE_URL"):
+    raise RuntimeError("Tests must be started as `python -m unittest tests.<module>` so they use a test database")
 
 engine = create_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(engine, expire_on_commit=False)
@@ -85,6 +92,7 @@ class Project(Base):
     jira_name: Mapped[str] = mapped_column(String(200))
     hook_id: Mapped[int | None] = mapped_column(BigInteger)
     webhook_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    staging_url: Mapped[str | None] = mapped_column(String(500))  # where tests run (UC4). Never the live system
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
@@ -131,6 +139,9 @@ def ensure_columns() -> None:
             for name in ("github_id", "github_login"):
                 if not columns[name]["nullable"]:
                     conn.execute(text(f"ALTER TABLE users ALTER COLUMN {name} DROP NOT NULL"))
+    if "projects" in existing and "staging_url" not in {c["name"] for c in inspect(engine).get_columns("projects")}:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE projects ADD COLUMN staging_url VARCHAR(500)"))
     for table in ("spec_files", "collections"):
         if table not in existing:
             continue
@@ -146,8 +157,10 @@ def init_db() -> None:
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         except Exception as exc:
             logging.warning("Could not enable pgvector: %s", exc)
+    from . import qa_db  # noqa: F401  registers the test run and QA Memory tables on Base
     Base.metadata.create_all(engine)
     ensure_columns()
+    qa_db.add_vector_column()
 
 
 def get_db():

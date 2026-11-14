@@ -411,7 +411,8 @@ class CleanupTests(AnalysisTestCase):
 
 
 class ScopeTests(unittest.TestCase):
-    """The Test & Execution Agent is out of this scope and must not have been dragged in."""
+    """The agents package holds the agents' own code: the analysis, plus the Report Agent and the Manager's loop for
+    the Test and Report agents (FYP II scope). The test runner itself lives in backend/execution.py."""
 
     def test_the_agents_package_holds_only_the_analysis_scope(self):
         import pathlib
@@ -419,7 +420,7 @@ class ScopeTests(unittest.TestCase):
         import agents
         names = {p.stem for p in pathlib.Path(agents.__file__).parent.glob("*.py")}
         self.assertEqual(names, {"__init__", "analysis", "events", "github_client", "llm",
-                                 "manager", "models", "redact", "risk_rules", "runner", "trace"})
+                                 "manager", "models", "redact", "report", "risk_rules", "runner", "supervisor", "trace"})
         for absent in ("steps", "runners", "selector", "classifier", "drafter", "store", "test_phase"):
             self.assertNotIn(absent, names, f"{absent} belongs to the Test Agent, not this scope")
 

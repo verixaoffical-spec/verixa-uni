@@ -1,0 +1,112 @@
+/* Test Runs, Tickets, Trends and QA Memory (UC4 to UC11). Uses the tokens of dashboard.css, so the light theme works too. */
+  .workspace.qwide{grid-template-columns:minmax(0,1fr);}
+  .qmuted{color:hsl(var(--muted-foreground));font-size:12.5px;}
+  .qtitle{font-weight:500;overflow-wrap:anywhere;}
+  .qtag{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap;border:1px solid currentColor;}
+  .qtag i{width:6px;height:6px;border-radius:50%;background:currentColor;}
+  .qtag.ok{color:#5FD199;background:hsl(150 60% 48%/.1);border-color:hsl(150 60% 48%/.3);}
+  .qtag.bad{color:var(--bad);background:rgba(196,61,61,.1);border-color:rgba(235,118,118,.3);}
+  .qtag.warn{color:var(--warn);background:rgba(201,122,31,.1);border-color:rgba(227,164,88,.3);}
+  .qtag.info{color:#9D93F0;background:hsl(var(--accent)/.1);border-color:hsl(var(--accent)/.3);}
+  .qtag.muted{color:hsl(var(--muted-foreground));background:var(--soft);border-color:var(--hair);}
+
+  /* run list and detail */
+  .qtable{max-height:none;border:1px solid var(--hair);border-radius:12px;margin-top:12px;}
+  .qtable .grid td{padding:8px 12px;height:auto;}
+  .qruns{max-height:300px;}
+  .qres{cursor:pointer;}
+  .qres:hover td,.qres.open td{background:hsl(var(--accent)/.06);}
+  .qres:focus-visible{outline:2px solid hsl(var(--accent));outline-offset:-2px;}
+  .qopen{padding:16px 18px !important;background:rgba(255,255,255,.015);}
+  .qside{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  .qside h4{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:hsl(var(--muted-foreground));margin-bottom:8px;}
+  .qdetail{margin-top:22px;}
+  .qsummary{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;}
+  .qsummary h2{font-size:19px;font-weight:600;letter-spacing:-.3px;}
+  .qsummary p{margin-top:3px;}
+  .qprogress{display:flex;align-items:center;gap:10px;margin-top:14px;padding:10px 14px;border-radius:10px;font-size:13px;color:#B7AEF5;background:hsl(var(--accent)/.08);border:1px solid hsl(var(--accent)/.25);}
+  .qprogress i{width:14px;height:14px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:qspin .8s linear infinite;}
+  @keyframes qspin{to{transform:rotate(360deg);}}
+  @media (prefers-reduced-motion:reduce){.qprogress i{animation:none;}}
+  .qcounts{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:16px;}
+  .qcount{padding:11px 13px;border-radius:12px;border:1px solid var(--hair);background:var(--soft);}
+  .qcount b{display:block;font-size:22px;font-weight:600;line-height:1.2;}
+  .qcount span{font-size:12px;color:hsl(var(--muted-foreground));}
+  .qcount.ok b{color:#5FD199;}
+  .qcount.bad b{color:var(--bad);}
+  .qcount.warn b{color:var(--warn);}
+  .qcount.info b{color:#9D93F0;}
+  .qfilters{display:flex;flex-wrap:wrap;gap:6px;margin-top:18px;}
+  .qfilter{padding:5px 11px;border-radius:8px;border:1px solid var(--hair);background:var(--soft);font-size:12.5px;color:hsl(var(--muted-foreground));}
+  .qfilter b{margin-left:5px;color:hsl(var(--foreground));}
+  .qfilter.on{border-color:hsl(var(--accent));color:hsl(var(--foreground));background:hsl(var(--accent)/.12);}
+  .qfilter:disabled{opacity:.4;cursor:default;}
+  .qsection{margin-top:26px;}
+  .qsection h3{font-size:15px;font-weight:600;margin-bottom:4px;}
+
+  /* evidence */
+  .qevidence{display:flex;flex-direction:column;gap:10px;}
+  .qevidence pre,.qlog pre,.qdiff,.qdraft pre,.qmemrow pre,.qerror{font:12px/1.55 'JetBrains Mono',monospace;white-space:pre-wrap;overflow-wrap:anywhere;}
+  .qerror{padding:10px 12px;border-radius:9px;color:#F4B4B4;background:rgba(196,61,61,.08);border:1px solid rgba(235,118,118,.25);max-height:220px;overflow:auto;}
+  .qshot img{display:block;max-width:100%;max-height:360px;border-radius:10px;border:1px solid var(--hair);}
+  .qtrace{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+  .qlog{border:1px solid var(--hair);border-radius:10px;background:var(--soft);}
+  .qlog summary{cursor:pointer;padding:8px 12px;font-size:12.5px;font-weight:600;}
+  .qlog pre,.qlog .qmuted,.qlog ul{padding:0 12px 10px;max-height:260px;overflow:auto;}
+
+  /* ticket, fix and drafted test */
+  .qticket,.qfix,.qdraft{margin-top:14px;padding:14px 16px;border-radius:12px;border:1px solid var(--hair);background:var(--soft);display:flex;flex-direction:column;gap:10px;}
+  .qticket header,.qfix header,.qdraft header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .qticket header .btn,.qfix header .btn{margin-left:auto;}
+  .qticket input,.qticket textarea,.connect input{display:block;width:100%;margin-top:5px;background:#08080a;border:1px solid hsl(var(--border));border-radius:9px;padding:8px 11px;color:hsl(var(--foreground));font:inherit;resize:vertical;}
+  .qticket input:disabled,.qticket textarea:disabled,.qticket select:disabled{opacity:.7;}
+  .qrow{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .qvalue{margin-top:5px;padding:9px 12px;border:1px solid var(--hair);border-radius:9px;color:hsl(var(--foreground));}
+  .qactions{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap;}
+  .qactions .qmuted{margin-right:auto;}
+  .qmem{list-style:disc inside;font-size:12.5px;}
+  .qdiff{padding:10px 12px;border-radius:9px;background:#08080a;border:1px solid var(--hair);max-height:300px;overflow:auto;}
+  .qdiff .add{color:#5FD199;}
+  .qdiff .del{color:var(--bad);}
+  .qdraft pre{padding:10px 12px;border-radius:9px;background:#08080a;border:1px solid var(--hair);max-height:260px;overflow:auto;}
+
+  /* compare, tickets list, trends, memory */
+  .qcompare-pick{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;}
+  .qcompare-pick .field{min-width:220px;}
+  .qcard{margin-top:10px;border:1px solid var(--hair);border-radius:12px;overflow:hidden;}
+  .qcard-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;width:100%;padding:12px 14px;background:var(--soft);border:0;text-align:left;}
+  .qcard-head .qtitle{flex:1;min-width:200px;}
+  .qcard-head:hover{background:hsl(var(--accent)/.06);}
+  .qcard-body{padding:14px;}
+  .qbars{display:flex;align-items:flex-end;gap:6px;height:170px;padding-top:10px;border-bottom:1px solid var(--hair);overflow-x:auto;}
+  .qbar{flex:1;min-width:26px;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;}
+  .qbar small{font-size:10.5px;color:hsl(var(--muted-foreground));}
+  .qbar-stack{width:100%;max-width:38px;display:flex;flex-direction:column;border-radius:6px 6px 0 0;overflow:hidden;min-height:3px;}
+  .qbar-stack span{display:block;min-height:3px;}
+  .qbar-stack .high,.qlegend .high{background:var(--bad);}
+  .qbar-stack .medium,.qlegend .medium{background:var(--warn);}
+  .qbar-stack .low,.qlegend .low{background:#5FD199;}
+  .qlegend{display:flex;gap:16px;margin-top:8px;font-size:12px;color:hsl(var(--muted-foreground));}
+  .qlegend span{display:inline-flex;align-items:center;gap:6px;}
+  .qlegend i{width:10px;height:10px;border-radius:3px;}
+  .qhbar{display:grid;grid-template-columns:minmax(90px,180px) 1fr auto;gap:12px;align-items:center;width:100%;padding:8px 10px;margin-top:6px;border-radius:9px;border:1px solid transparent;background:none;text-align:left;}
+  .qhbar:hover,.qhbar.on{border-color:var(--hair);background:var(--soft);}
+  .qhbar-track{height:8px;border-radius:5px;background:var(--soft);overflow:hidden;}
+  .qhbar-track i{display:block;height:100%;background:var(--bad);border-radius:5px;}
+  .qmemrow{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--hair);}
+  .qmemrow > div{min-width:0;flex:1;}
+  .qmemhead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:6px;}
+  .qmemrow pre{color:hsl(var(--muted-foreground));max-height:120px;overflow:auto;}
+
+  @media (max-width:760px){
+    .qside,.qrow{grid-template-columns:1fr;}
+    .qhbar{grid-template-columns:1fr;}
+    .qcompare-pick .field{min-width:0;width:100%;}
+  }
+
+  :root[data-theme="light"] .qticket input,:root[data-theme="light"] .qticket textarea,:root[data-theme="light"] .connect input,
+  :root[data-theme="light"] .qdiff,:root[data-theme="light"] .qdraft pre{background:#fff;}
+  :root[data-theme="light"] .qerror{color:#9B1C1C;}
+  :root[data-theme="light"] .qtag.ok,:root[data-theme="light"] .qcount.ok b,:root[data-theme="light"] .qdiff .add{color:#15803D;}
+  :root[data-theme="light"] .qtag.info,:root[data-theme="light"] .qcount.info b,:root[data-theme="light"] .qprogress{color:#4B3FC4;}
+  :root[data-theme="light"] .qopen{background:#FAFAFC;}

@@ -24,5 +24,8 @@ export const icons = {
   jiraSync: <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg>,
   library: <svg viewBox="0 0 24 24"><path d="M9 3v5.586a1 1 0 01-.293.707l-4.414 4.414A2 2 0 003 15.121V19a2 2 0 002 2h14a2 2 0 002-2v-3.879a2 2 0 00-1.293-1.414L15.293 9.293A1 1 0 0115 8.586V3" /><path d="M8 3h8M6 15h12" /></svg>,
   agentLogs: <svg viewBox="0 0 24 24"><path d="M4 17l6-6-6-6" /><path d="M12 19h8" /></svg>,
+  trends: <svg viewBox="0 0 24 24"><path d="M3 3v18h18" /><path d="M7 15l4-4 3 3 5-6" /></svg>,
+  memory: <svg viewBox="0 0 24 24"><path d="M12 5a3 3 0 00-5.6-1.5A3 3 0 004 8a3 3 0 00.5 5.5A3.5 3.5 0 0010 18h2zM12 5a3 3 0 015.6-1.5A3 3 0 0120 8a3 3 0 01-.5 5.5A3.5 3.5 0 0114 18h-2" /><path d="M12 5v13" /></svg>,
+  play: <svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z" /></svg>,
   integrations: <svg viewBox="0 0 24 24"><path d="M12 22v-5" /><path d="M9 8V2M15 8V2" /><path d="M18 8v5a4 4 0 01-4 4h-4a4 4 0 01-4-4V8z" /></svg>,
 };

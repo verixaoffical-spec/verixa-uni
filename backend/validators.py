@@ -14,7 +14,10 @@ SECRET_WARNING = "Possible API key or token found. Move secrets to environment v
 
 # Run code from text, so an uploaded test could do anything on the machine running it. A check on the text cannot catch
 # every disguise, so the test runner still has to run uploads in a sandbox.
-FORBIDDEN_RE = re.compile(r"child_process|worker_threads|process\.(?:binding|dlopen)|(?<![\w$.])eval\s*\(|\bnew\s+Function\s*\(")
+FORBIDDEN_RE = re.compile(r"child_process|worker_threads|\bprocess\s*[.\[]|\bglobalThis\b|\brequire\s*\(|\bimport\s*\(|"
+                          r"(?<![\w$.])eval\s*\(|\bnew\s+Function\s*\(|\.constructor\s*[(\[]|\bfile:/")
+# Uploaded tests run on the Verixa server (UC4), so they may import nothing but Playwright itself.
+IMPORT_FROM_RE = re.compile(r"""^\s*(?:import|export)\b[^'"\n;]*?['"]([^'"\n]+)['"]""", re.M)
 # These read local files or run code instead of calling an API.
 BAD_URL_RE = re.compile(r"^\s*(javascript|vbscript|data|file|ftp)\s*:", re.I)
 
@@ -138,7 +141,10 @@ def analyse_spec(text: str) -> dict:
     if not IMPORT_RE.search(clean):
         errors.append("Missing import from '@playwright/test'")
     if forbidden := FORBIDDEN_RE.search(clean):
-        errors.append(f"Uses {forbidden.group().rstrip(' (')}, which is not allowed in uploaded tests")
+        errors.append(f"Uses {forbidden.group().rstrip(' ([.')}, which is not allowed in uploaded tests")
+    others = sorted({m.group(1) for m in IMPORT_FROM_RE.finditer(clean)} - {"@playwright/test"})
+    if others:
+        errors.append(f"Imports {', '.join(others[:3])}. Uploaded tests may only import from '@playwright/test'")
     if not balanced:
         errors.append("File looks incomplete. A bracket or quote is not closed")
     tests, line, counted_to = [], 1, 0

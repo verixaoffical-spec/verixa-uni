@@ -285,7 +285,8 @@ class ConnectTests(CrudTestCase):
                          ("ada/shop", "QA", "QA Board", 111))
         self.assertIsNotNone(project.webhook_verified_at)
         self.assertEqual(self.session()["project"],
-                         {"repo": "ada/shop", "jira_key": "QA", "jira_name": "QA Board", "webhook_verified": True})
+                         {"repo": "ada/shop", "jira_key": "QA", "jira_name": "QA Board", "webhook_verified": True,
+                          "staging_url": None})
         self.assertEqual(self.session()["github"]["login"], "ada")
         self.assertEqual(self.session()["atlassian"]["site"], "ada.atlassian.net")
 

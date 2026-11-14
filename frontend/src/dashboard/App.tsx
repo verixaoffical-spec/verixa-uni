@@ -4,6 +4,10 @@ import ConnectView from './ConnectView';
 import LibraryView from './LibraryView';
 import Rail, { type View } from './Rail';
 import RiskView from './RiskView';
+import RunsView from './RunsView';
+import TicketsView from './TicketsView';
+import TrendsView from './TrendsView';
+import MemoryView from './MemoryView';
 import ProfileView from './ProfileView';
 import SecurityView from './SecurityView';
 import type { HookState, Link } from './connection';
@@ -21,7 +25,9 @@ function leave(url: string) {
 const goLogin = (flag: string) => leave(`/login?${flag}&next=${encodeURIComponent(location.pathname)}${location.hash}`);
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-const VIEWS: View[] = ['connect', 'library', 'security', 'risk', 'profile'];
+const VIEWS: View[] = ['connect', 'library', 'security', 'risk', 'profile', 'runs', 'tickets', 'trends', 'memory'];
+// Screens that need a connected project. Opened before connecting, they show their own "connect first" screen.
+const PROJECT_VIEWS: View[] = ['library', 'risk', 'runs', 'tickets', 'trends', 'memory'];
 const viewFromHash = (): View => {
   const wanted = location.hash.slice(1) as View;
   return VIEWS.includes(wanted) ? wanted : 'connect';
@@ -36,6 +42,8 @@ export default function App() {
   const [atlassian, setAtlassian] = useState<Session['atlassian']>(null);
   const [link, setLink] = useState<Link | null>(null);
   const [hook, setHook] = useState<HookState>('off');
+  const [staging, setStaging] = useState<string | null>(null);
+  const [openRun, setOpenRun] = useState<{ id: number } | null>(null);  // a new object each time, so opening the same run again still works
 
   // The view is kept in the address (#connect or #library), so a refresh or a shared link reopens it
   function show(next: View) {
@@ -85,14 +93,15 @@ export default function App() {
     const p = s.project;
     if (!s.github || !s.atlassian) {
       // Asking for the Test Library or Risk Analysis before linking shows their "connect first" screen
-      open(wanted === 'library' || wanted === 'risk' ? wanted : 'connect');
+      open(PROJECT_VIEWS.includes(wanted as View) ? wanted as View : 'connect');
       return;
     }
     if (!p) return open('connect');
     setLink({ repo: p.repo, jiraKey: p.jira_key, project: `${p.jira_name} (${p.jira_key})` });
     setHook(p.webhook_verified ? 'ok' : 'wait');
+    setStaging(p.staging_url);
     library.load(s);
-    open(wanted === 'connect' ? 'connect' : wanted === 'risk' ? 'risk' : 'library');
+    open(wanted === 'connect' || PROJECT_VIEWS.includes(wanted as View) ? wanted as View : 'library');
   }
 
   // ---- the session ending while the page is open ----
@@ -110,6 +119,17 @@ export default function App() {
         run: () => { lostShown.current = false; window.open('/login', '_blank', 'noopener'); },
       });
     });
+  }, []);
+
+  // An approved drafted test was added to the library on the server. Reload it, unless there is unsaved work there:
+  // that is never thrown away, and saving it later shows the Reload latest banner instead.
+  useEffect(() => {
+    const refresh = async () => {
+      if (unsaved.current) return;
+      try { library.load(await api.session()); } catch { /* the next page load reads it */ }
+    };
+    addEventListener('verixa:library-changed', refresh);
+    return () => removeEventListener('verixa:library-changed', refresh);
   }, []);
 
   // ---- browser events ----
@@ -159,11 +179,18 @@ export default function App() {
       <Rail view={view} onView={show} account={account} unsavedChanges={library.changes} onSignedOut={onSignedOut} />
       <main>
         <ConnectView hidden={view !== 'connect'} account={account} github={github} atlassian={atlassian} link={link} hook={hook}
+                     staging={staging} onStaging={setStaging}
                      onConnected={(newLink, newHook) => { setLink(newLink); setHook(newHook); }}
                      onChangeRepo={() => { setLink(null); setHook('off'); }}
                      onOpenLibrary={() => show('library')} />
         <LibraryView hidden={view !== 'library'} link={link} hook={hook} library={library} onGoConnect={() => show('connect')} />
-        <RiskView hidden={view !== 'risk'} link={link} hook={hook} onGoConnect={() => show('connect')} />
+        <RiskView hidden={view !== 'risk'} link={link} hook={hook} staging={staging} onGoConnect={() => show('connect')}
+                  onRunStarted={id => { setOpenRun({ id }); show('runs'); }} />
+        <RunsView hidden={view !== 'runs'} link={link} openRun={openRun} onGoConnect={() => show('connect')} />
+        <TicketsView hidden={view !== 'tickets'} link={link} onGoConnect={() => show('connect')}
+                     onOpenRun={id => { setOpenRun({ id }); show('runs'); }} />
+        <TrendsView hidden={view !== 'trends'} link={link} onGoConnect={() => show('connect')} onOpenRisk={() => show('risk')} />
+        <MemoryView hidden={view !== 'memory'} link={link} onGoConnect={() => show('connect')} />
         <ProfileView hidden={view !== 'profile'} account={account} onAccount={setAccount}
                      onDeleted={() => { loader.show('Signing you out'); leave('/login?deleted'); }}
                      onSignInAgain={() => signOut().then(() => goLogin('reauth'))} />

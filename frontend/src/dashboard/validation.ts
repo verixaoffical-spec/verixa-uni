@@ -9,7 +9,9 @@ export const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTION
 const TEST_RE = /(?<![\w.$])test(?:\.(only|skip|fixme))?\s*\(\s*(['"`])((?:\\.|(?!\2)[^\\\n])*)\2/g;
 const SECRET_RE = /ghp_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|xox[bp]-[A-Za-z0-9]+-[A-Za-z0-9-]+/;
 const SECRET_WARN = 'Possible API key or token found. Move secrets to environment variables';
-const FORBIDDEN_RE = /child_process|worker_threads|process\.(?:binding|dlopen)|(?<![\w$.])eval\s*\(|\bnew\s+Function\s*\(/;
+// Same rules as backend/validators.py: uploaded tests run on the Verixa server, so they may not reach Node's own powers
+const FORBIDDEN_RE = /child_process|worker_threads|\bprocess\s*[.[]|\bglobalThis\b|\brequire\s*\(|\bimport\s*\(|(?<![\w$.])eval\s*\(|\bnew\s+Function\s*\(|\.constructor\s*[([]|\bfile:\//;
+const IMPORT_FROM_RE = /^\s*(?:import|export)\b[^'"\n;]*?['"]([^'"\n]+)['"]/gm;
 const BAD_URL_RE = /^\s*(javascript|vbscript|data|file|ftp)\s*:/i;
 const MAX_DEPTH = 50;
 const BAD_NAME = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁯﻿<>:"\/\\|?*]/;
@@ -149,7 +151,9 @@ export function analyseSpec(text: string): SpecAnalysis {
 
   if (!/\bfrom\s+['"]@playwright\/test['"]/.test(clean)) errors.push("Missing import from '@playwright/test'");
   const forbidden = FORBIDDEN_RE.exec(clean);
-  if (forbidden) errors.push(`Uses ${forbidden[0].replace(/[\s(]+$/, '')}, which is not allowed in uploaded tests`);
+  if (forbidden) errors.push(`Uses ${forbidden[0].replace(/[\s([.]+$/, '')}, which is not allowed in uploaded tests`);
+  const others = [...new Set([...clean.matchAll(IMPORT_FROM_RE)].map(m => m[1]))].filter(m => m !== '@playwright/test').sort();
+  if (others.length) errors.push(`Imports ${others.slice(0, 3).join(', ')}. Uploaded tests may only import from '@playwright/test'`);
   if (!balanced) errors.push('File looks incomplete. A bracket or quote is not closed');
 
   const tests: TestCase[] = [...clean.matchAll(TEST_RE)].map(m => ({

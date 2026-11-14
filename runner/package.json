@@ -1,0 +1,9 @@
+{
+  "name": "verixa-runner",
+  "private": true,
+  "description": "Playwright and Newman, used by the Test Agent to run the tester's uploaded tests on staging",
+  "dependencies": {
+    "@playwright/test": "1.64.1",
+    "newman": "6.2.1"
+  }
+}

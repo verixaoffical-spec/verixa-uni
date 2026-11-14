@@ -3,7 +3,7 @@ import AccountMenu from './AccountMenu';
 import type { Account } from './api';
 import { icons } from './icons';
 
-export type View = 'connect' | 'library' | 'security' | 'risk' | 'profile';
+export type View = 'connect' | 'library' | 'security' | 'risk' | 'profile' | 'runs' | 'tickets' | 'trends' | 'memory';
 
 interface Props {
   view: View;
@@ -11,11 +11,6 @@ interface Props {
   account: Account | null;
   unsavedChanges: number;
   onSignedOut: () => void;
-}
-
-// A page that is planned but not built yet
-function ComingSoon({ label, icon }: { label: string; icon: ReactNode }) {
-  return <button className="ri" disabled aria-label={label} data-tip={`${label}, coming soon`}>{icon}</button>;
 }
 
 // The narrow navigation bar on the left
@@ -33,12 +28,12 @@ export default function Rail({ view, onView, account, unsavedChanges, onSignedOu
       </a>
       <nav className="rail-nav" aria-label="Main">
         {item('risk', 'Risk Analysis', icons.pullRequests)}
-        <ComingSoon label="Test Runs" icon={icons.testRuns} />
-        <ComingSoon label="Evidence" icon={icons.evidence} />
-        <ComingSoon label="Jira Sync" icon={icons.jiraSync} />
+        {item('runs', 'Test Runs and Evidence', icons.testRuns)}
+        {item('tickets', 'Jira Tickets', icons.jiraSync)}
+        {item('trends', 'Risk Trends', icons.trends)}
         <span className="sep"></span>
         {item('library', 'Test Library', icons.library)}
-        <ComingSoon label="Agent Logs" icon={icons.agentLogs} />
+        {item('memory', 'QA Memory', icons.memory)}
         {item('connect', 'Integrations', icons.integrations)}
       </nav>
       <AccountMenu account={account} unsavedChanges={unsavedChanges} onIntegrations={() => onView('connect')}

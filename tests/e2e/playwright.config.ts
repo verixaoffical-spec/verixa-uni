@@ -15,6 +15,7 @@ export default defineConfig({
     { name: 'live', testMatch: 'agents.live.spec.ts', timeout: 300_000, use: { baseURL: 'http://localhost:8012', browserName: 'chromium' } },
     { name: 'forgot', testMatch: 'forgot_password.spec.ts', use: { baseURL: 'http://localhost:8011', browserName: 'chromium', screenshot: 'only-on-failure' } },
     { name: 'signup', testMatch: 'signup.spec.ts', use: { baseURL: 'http://localhost:8011', browserName: 'chromium', screenshot: 'only-on-failure' } },
+    { name: 'qa', testMatch: 'qa.spec.ts', timeout: 150_000, use: { baseURL: 'http://localhost:8011', browserName: 'chromium' } },
     { name: 'profile', testMatch: 'profile.spec.ts', use: { baseURL: 'http://localhost:8011', browserName: 'chromium', screenshot: 'only-on-failure' } },
   ],
   webServer: {

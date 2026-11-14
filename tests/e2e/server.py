@@ -171,10 +171,92 @@ def capture_email() -> None:
     email_verify.send_email = send_email
 
 
+STAGING_PORT = 8013
+STAGING_PAGE = b"""<!doctype html><html><head><title>Shoplite</title></head><body><h1>Shoplite</h1>
+<p id="total">Total: 30</p><script>console.log('cart loaded')</script></body></html>"""
+QA_SPECS = {
+    "cart.spec.ts": """import { test, expect } from '@playwright/test';
+test('home shows the shop name', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('h1')).toHaveText('Shoplite');
+});
+test('cart total is right <img src=x onerror=alert(1)>', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#total')).toHaveText('Total: 20', { timeout: 1500 });
+});
+""",
+    "wishlist.spec.ts": """import { test, expect } from '@playwright/test';
+test('wishlist lists saved items', async ({ page }) => {
+  await page.goto('/wishlist');
+  await expect(page.locator('h1')).toHaveText('Wishlist');
+});
+""",
+}
+
+
+def script_test_agent() -> None:
+    """UC4 to UC11 in the browser: a real staging app, real Playwright and Newman, a scripted model and a scripted Jira."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    from agents import github_client, report
+    from backend import qa_service
+    from backend.db import Collection, SpecFile
+
+    class Staging(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_GET(self):
+            code, body, kind = {"/": (200, STAGING_PAGE, "text/html"), "/api/health": (200, b'{"ok":true}', "application/json"),
+                                "/api/orders": (500, b'{"error":"db down"}', "application/json")}.get(self.path, (404, b"missing", "text/plain"))
+            self.send_response(code)
+            self.send_header("Content-Type", kind)
+            self.end_headers()
+            self.wfile.write(body)
+
+    threading.Thread(target=ThreadingHTTPServer(("127.0.0.1", STAGING_PORT), Staging).serve_forever, daemon=True).start()
+
+    with SessionLocal() as db:  # demo/shop starts with a Test Library, so the browser test goes straight to running it
+        project = db.scalar(select(Project).where(Project.repo == "demo/shop"))
+        for name, text in QA_SPECS.items():
+            db.add(SpecFile(project_id=project.id, name=name, content=text, size=len(text), test_count=text.count("test(")))
+        api = {"info": {"name": "Shop API", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+               "item": [{"name": n, "request": {"method": "GET", "url": "{{baseUrl}}" + p}, "event": [{"listen": "test", "script": {
+                   "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));"]}}]}
+                        for n, p in (("health", "/api/health"), ("orders", "/api/orders"), ("coupons", "/api/coupons"))]}
+        text = json.dumps(api)
+        db.add(Collection(project_id=project.id, name="shop.json", content=text, size=len(text), request_count=3))
+        db.commit()
+
+    async def explain(test, error, *args):
+        return {"likely_cause": f"The test {test} fails because {error.splitlines()[0][:120]}. The cart total or the orders "
+                                "endpoint returns the wrong value.", "steps": ["Open the shop", "Look at the cart total"], "model": "scripted"}
+
+    async def draft(module, code, name, feedback):
+        return {"code": "import { test, expect } from '@playwright/test';\n"
+                        f"test('{module} page opens', async ({{ page }}) => {{ await page.goto('/'); await expect(page.locator('h1')).toBeVisible(); }});\n",
+                "model": "scripted"}
+
+    async def fix(test, error, code, memory, feedback):
+        return {"diff": "--- a/src/payments/session.ts\n+++ b/src/payments/session.ts\n@@ -1 +1 @@\n-total = price * 2\n+total = price\n",
+                "explanation": "The total doubles the price. Using the price once makes the cart total test pass.", "model": "scripted"}
+
+    report.explain_failure, report.draft_test, report.suggest_fix = explain, draft, fix
+    github_client.fetch_pr = lambda repo, number, token=None: ({}, [
+        {"filename": "src/payments/session.ts", "additions": 1, "deletions": 1, "patch": "-total = price\n+total = price * 2"},
+        {"filename": "src/wishlist/page.ts", "additions": 3, "deletions": 0, "patch": "+export const wishlist = []"}])
+    qa_service.github_access_token = lambda db, user: "demo"
+    filed = iter(range(101, 10_000))
+    qa_service.file_issue = lambda db, user, key, summary, description, priority, files: (
+        f"{key}-{(n := next(filed))}", f"https://demo.atlassian.net/browse/{key}-{n}", [])
+
+
 if __name__ == "__main__":
     seed()
     capture_email()
     if not LIVE:
         script_github_and_model()
+        script_test_agent()
     print(f"e2e server on {PORT}, database {DB}", flush=True)
     uvicorn.run("backend.main:app", host="127.0.0.1", port=PORT, log_level="warning")

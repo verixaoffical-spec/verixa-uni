@@ -4,6 +4,7 @@ import tempfile
 
 os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL") or (
     "sqlite:///" + os.path.join(tempfile.gettempdir(), "verixa-tests.db").replace("\\", "/"))
+os.environ["VERIXA_TEST_DB"] = os.environ["DATABASE_URL"]  # backend/db.py refuses to run tests without this
 os.environ["PUBLIC_URL"] = "http://testserver"
 # The agents' trace stays out of the real log and out of the test output.
 os.environ["AGENT_TRACE_FILE"] = os.path.join(tempfile.gettempdir(), "verixa-tests-trace.jsonl")

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { ApiError, api, linkAgain, type Account, type Session, type Targets } from './api';
+import { ApiError, api, linkAgain, qa, type Account, type Session, type Targets } from './api';
 import { Chip, hookLabel, type HookState, type Link } from './connection';
 import { icons } from './icons';
 import { useToast } from './Toast';
@@ -12,6 +12,8 @@ interface Props {
   atlassian: Session['atlassian'];
   link: Link | null;
   hook: HookState;
+  staging: string | null;
+  onStaging: (url: string) => void;
   onConnected: (link: Link, hook: HookState) => void;
   onChangeRepo: () => void;
   onOpenLibrary: () => void;
@@ -47,7 +49,7 @@ function TimelineNode({ state, title, sub }: { state: StepState; title: string; 
   );
 }
 
-export default function ConnectView({ hidden, account, github, atlassian, link, hook, onConnected, onChangeRepo, onOpenLibrary }: Props) {
+export default function ConnectView({ hidden, account, github, atlassian, link, hook, staging, onStaging, onConnected, onChangeRepo, onOpenLibrary }: Props) {
   const toast = useToast();
   const [targets, setTargets] = useState<Targets>({ repos: [], projects: [] });
   const [targetsProblem, setTargetsProblem] = useState<{ message: string; relink: boolean } | null>(null);  // why the lists are empty
@@ -57,6 +59,28 @@ export default function ConnectView({ hidden, account, github, atlassian, link, 
   const [connecting, setConnecting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const linked = !!(github && atlassian);
+  const [stagingDraft, setStagingDraft] = useState(staging ?? '');
+  const [stagingBusy, setStagingBusy] = useState(false);
+  const [stagingNote, setStagingNote] = useState<{ text: string; bad: boolean } | null>(null);
+  // Fill the box once the saved address arrives, but never overwrite what the tester already typed
+  useEffect(() => { setStagingDraft(typed => typed || staging || ''); }, [staging]);
+
+  async function saveStaging() {
+    const url = stagingDraft.trim();
+    if (!/^https?:\/\/[^\s]+$/i.test(url)) return setStagingNote({ text: 'Enter an http:// or https:// address, for example https://staging.example.com', bad: true });
+    setStagingBusy(true);
+    try {
+      const res = await qa.saveStaging(url);
+      onStaging(res.staging_url);
+      setStagingDraft(res.staging_url);  // show exactly what was saved, without the trailing slash
+      setStagingNote(res.reachable ? { text: `Saved. ${res.staging_url} answered`, bad: false }
+                                   : { text: `Saved, but ${res.staging_url} did not answer. Start it before you run tests`, bad: true });
+    } catch (err) {
+      setStagingNote({ text: err instanceof ApiError ? err.message : 'The address could not be saved', bad: true });
+    } finally {
+      setStagingBusy(false);
+    }
+  }
 
   // Once both services are linked, load the repositories and Jira projects to choose from
   useEffect(() => {
@@ -178,6 +202,22 @@ export default function ConnectView({ hidden, account, github, atlassian, link, 
           )}
         </Step>
 
+        <Step state={link ? (staging ? 'done' : 'active') : 'wait'} icon={icons.play} title="Staging app"
+              hint="Where your tests run. Never the live system">
+          <div className="formgrid">
+            <label className="field" style={{ gridColumn: '1 / -1' }}>Staging address
+              <input value={stagingDraft} onChange={e => { setStagingDraft(e.target.value); setStagingNote(null); }}
+                     onKeyDown={e => { if (e.key === 'Enter' && !stagingBusy) saveStaging(); }}
+                     placeholder="https://staging.example.com" maxLength={500} spellCheck={false} disabled={stagingBusy} />
+            </label>
+            <button className="btn" disabled={stagingBusy || !stagingDraft.trim() || stagingDraft.trim() === staging} onClick={saveStaging}>
+              {stagingBusy ? 'Checking…' : staging ? 'Update staging address' : 'Save staging address'}
+            </button>
+          </div>
+          {stagingNote ? <div className={stagingNote.bad ? 'warnbox' : 'note'} role="status">{stagingNote.text}</div>
+            : <p className="hintline">Playwright opens it as baseURL and Newman gets it as {'{{baseUrl}}'}.</p>}
+        </Step>
+
         <div className="bar">
           <span className={'state' + (link ? '' : ' idle')}>
             <i></i><span>{link ? 'Connected' : linked ? 'Choose a repository' : 'Waiting for GitHub and Jira'}</span>
@@ -192,12 +232,14 @@ export default function ConnectView({ hidden, account, github, atlassian, link, 
       <aside className="side">
         <div className="panel">
           <div className="ph">Setup progress</div>
-          <p className="phint">Three steps, then you are ready to upload tests.</p>
+          <p className="phint">Set up once, then upload tests and run them on staging.</p>
           <ol className="timeline">
             <TimelineNode state={stateOf(1)} title="Link GitHub and Jira" sub={linked ? `Linked as @${github!.login}` : 'GitHub and Atlassian'} />
             <TimelineNode state={stateOf(2)} title="Choose repository" sub={link ? `${link.repo}, ${link.project}` : 'Repository and Jira project'} />
             <TimelineNode state={stateOf(3)} title="Create webhook"
                           sub={hook === 'ok' ? 'Active and verified' : hook === 'wait' ? 'Created, waiting for GitHub' : 'Pull request events'} />
+            <TimelineNode state={link ? (staging ? 'done' : 'active') : 'wait'} title="Staging app"
+                          sub={staging ?? 'Where your tests run'} />
             <li className={'node base' + (step > 3 ? ' done' : '')}>
               <i className="dot"></i>
               <div className="nbody"><b>Test Library</b><small>{step > 3 ? 'Ready for your tests' : 'Opens when setup is done'}</small></div>

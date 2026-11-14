@@ -53,7 +53,10 @@ cd D:\d\verixa-final
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 cd frontend; npm install; npm run build; cd ..
+cd runner; npm install; npx playwright install chromium; cd ..
 ```
+
+`runner/` holds Playwright and Newman, which run the tester's tests when **Run Now** is pressed.
 
 Run `npm run build` again after any change in `frontend/`.
 
@@ -124,10 +127,17 @@ your own computer.
 ## Run the tests
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest tests.test_validators tests.test_library tests.test_accounts tests.test_crud tests.test_twofactor tests.test_risk_rules tests.test_analysis_integration tests.test_qa_security tests.test_risk_eval tests.test_github_refresh tests.test_legal_pages tests.test_password_reset tests.test_live tests.test_ci_check tests.test_agent_fixes tests.test_manager_matching
+.\.venv\Scripts\python.exe -m unittest tests.test_validators tests.test_library tests.test_accounts tests.test_crud tests.test_twofactor tests.test_risk_rules tests.test_analysis_integration tests.test_qa_security tests.test_risk_eval tests.test_github_refresh tests.test_legal_pages tests.test_password_reset tests.test_live tests.test_ci_check tests.test_agent_fixes tests.test_manager_matching tests.test_agent_trace tests.test_agent_secrets tests.test_qa_units tests.test_qa_flow tests.test_qa_system
 ```
 
-The tests use their own temporary database and take about 3 minutes. For more cases to try by hand, see
+The tests use their own temporary database and take about 4 minutes. **Always name the modules. Never run
+`unittest discover -s tests`**: it would skip the test database, so the app now refuses to start that way.
+
+The browser tests (real browser, real app, a small staging app with bugs on purpose):
+
+```powershell
+cd tests\e2e; npx playwright test --project=qa --project=controlled --project=signup --project=forgot --project=profile; cd ..\..
+``` For more cases to try by hand, see
 [samples/test-data/README.md](samples/test-data/README.md).
 
 ## If something goes wrong
@@ -145,4 +155,8 @@ The tests use their own temporary database and take about 3 minutes. For more ca
 | "The saved sign in no longer works" | Press **Link again** and approve GitHub and Atlassian |
 | A pull request does not appear by itself | Check that Window 2 is on, and that Integrations shows the webhook as verified. Use **Analyse now** meanwhile |
 | Analysis says the Manager did not accept the output | The AI model failed or is over its limit. The rule-based label is still correct. Check the keys in `.env` |
+| Run Now says "Add the staging address" | Enter the staging app's address on **Integrations**, step "Staging app" |
+| A run fails with "Staging is not answering" | Start the staging app, or fix its address on Integrations |
+| "Test tools are not installed" | Run `cd runner; npm install; npx playwright install chromium` |
+| A ticket says "Jira refused" | Your Atlassian account needs permission to create issues in that Jira project |
 | The page looks old | Run `npm run build` in `frontend`, restart the app, then press `Ctrl+F5` |
