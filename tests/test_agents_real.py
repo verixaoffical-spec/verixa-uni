@@ -525,6 +525,8 @@ class AgentsStayInTheirRole(unittest.TestCase):
         for folder in ("agents", "backend"):
             for path, text in self.source(folder):
                 for fixture in ("ada/shop", "demo/shop", "jsonplaceholder", "unittest", "from tests"):
+                    if fixture == "unittest" and path.name == "db.py":
+                        continue  # db.py names it only in the guard that keeps the tests off the real database
                     self.assertNotIn(fixture, text, path.name)
                 self.assertIsNone(re.search(r"\b[0-9a-f]{40}\b", text), f"a commit hash in {path.name}")
 

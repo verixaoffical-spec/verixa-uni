@@ -1,6 +1,6 @@
 /* Shared pieces of the Test Runs, Tickets, Trends and QA Memory screens (UC4 to UC11). */
 import { useEffect, useState, type ReactNode } from 'react';
-import { ApiError, qa, type Draft, type Fix, type Outcome, type Result, type RunStatus, type Ticket } from './api';
+import { ApiError, qa, type Draft, type Fix, type MemoryUsed, type Outcome, type Result, type RunStatus, type Ticket } from './api';
 import { icons } from './icons';
 import { useToast } from './Toast';
 
@@ -174,11 +174,7 @@ export function TicketEditor({ ticket, onChange }: { ticket: Ticket; onChange: (
         <div className="field">Suggested assignee<div className="qvalue">{ticket.assignee || 'none'}</div></div>
       </div>
       {ticket.fix_text && <details className="qlog"><summary>Suggested fix in this ticket</summary><pre>{ticket.fix_text}</pre></details>}
-      {!!ticket.memory_used.length && (
-        <details className="qlog"><summary>QA Memory used ({ticket.memory_used.length})</summary>
-          <ul className="qmem">{ticket.memory_used.map(m => <li key={m.id}>{m.pr_number ? `PR #${m.pr_number}: ` : ''}{m.text}</li>)}</ul>
-        </details>
-      )}
+      <MemoryUsedList items={ticket.memory_used} />
       {open && (
         <div className="qactions">
           {problem && <span className="qmuted">{problem}</span>}
@@ -187,7 +183,7 @@ export function TicketEditor({ ticket, onChange }: { ticket: Ticket; onChange: (
           <button className="btn sm" disabled={!!busy || !!problem} onClick={() => act('file')}>{busy === 'file' ? 'Filing…' : 'Approve and file in Jira'}</button>
         </div>
       )}
-      <p className="qmuted">Nothing is sent to Jira until you approve it. Secrets are removed from attached logs.</p>
+      <p className="qmuted">Nothing is sent to Jira until you approve it. Keys, tokens and passwords are removed from the ticket text and the attached logs. The browser trace stays in Verixa and is not attached.</p>
     </div>
   );
 }
@@ -252,6 +248,16 @@ export function FixPanel({ result, fixes, ticketOpen, onFix }: { result: Result;
 
 // ---------- a drafted test for a coverage gap (UC5) ----------
 
+/** Which QA Memory entries an agent used, so the tester can judge its result (Req 8.6). */
+export function MemoryUsedList({ items }: { items: MemoryUsed[] }) {
+  if (!items.length) return null;
+  return (
+    <details className="qlog"><summary>QA Memory used ({items.length})</summary>
+      <ul className="qmem">{items.map(m => <li key={m.id}>{m.pr_number ? `PR #${m.pr_number}: ` : ''}{m.text}</li>)}</ul>
+    </details>
+  );
+}
+
 export function DraftCard({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => void }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -275,6 +281,7 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: (d: Dra
         <Tag cls={draft.status === 'Approved' ? 'ok' : draft.status === 'Rejected' ? 'muted' : 'info'}>{draft.status}</Tag>
       </header>
       <pre>{draft.code}</pre>
+      <MemoryUsedList items={draft.memory_used} />
       {draft.status === 'Drafted' && (
         <div className="qactions">
           <button className="btn ghost sm" disabled={busy} onClick={() => decide(false)}>Reject</button>

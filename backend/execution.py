@@ -180,7 +180,9 @@ def write_playwright(folder: Path, staging: str, specs: dict[str, str]) -> None:
         "testDir": "./specs", "outputDir": "./output", "timeout": settings.test_timeout_ms,
         "retries": 1,  # a failure gets one more attempt, so a temporary error is retried once (Req 4.7)
         "workers": 2, "reporter": [["json", {"outputFile": "report.json"}]],
-        "use": {"baseURL": staging, "headless": True, "screenshot": "only-on-failure", "trace": "retain-on-failure"},
+        "use": {"baseURL": staging, "headless": True, "screenshot": "only-on-failure",
+                # a failure is always tried again, so recording only that second try keeps passing tests fast
+                "trace": "on-first-retry"},
     }
     (folder / "playwright.config.mjs").write_text(
         "import { defineConfig } from '@playwright/test';\nexport default defineConfig(" + json.dumps(config) + ");\n",

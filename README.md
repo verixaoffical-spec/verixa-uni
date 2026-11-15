@@ -1,37 +1,198 @@
-# Verixa: Deliverable 1 + Deliverable 2 (risk scoring)
+# Verixa: an agentic AI quality engineer
 
-One application that joins the completed Deliverable 1 work from **official_ui-main** with the
-completed Deliverable 2 risk-scoring work from **multi-agents**.
+Verixa sits between GitHub, Playwright, Newman and Jira. When a pull request is opened it rates how risky the
+change is. When the tester presses **Run Now** it runs the right tests on staging, collects proof for every
+failure and drafts a Jira ticket. **Nothing reaches Jira until the tester approves it.**
 
-A pull request opened on a connected repository is scored automatically: rules in code decide the
-risk label, the Analysis Agent writes the reasoning and the test areas, the Manager validates that
-output and retries with feedback, and the result lands on the Risk Analysis screen in the
-dashboard. Accounts, two-step verification, the GitHub and Jira connection and the Test Library are
-the Deliverable 1 app.
+All eleven use cases of the SRS (version 1.1) are built: UC1 to UC7 (FYP I) and UC8 to UC11 (FYP II).
 
-FastAPI serves both the API and the built React frontend, so there is one server and one address.
-Data is stored in the shared Neon PostgreSQL database.
+FastAPI serves both the API and the built React dashboard, so there is one server and one address.
+Data is stored in one PostgreSQL database. Proof files (screenshots, traces, logs) stay on the server disk.
 
-**New to the project? Read [README_SIMPLE.md](README_SIMPLE.md).** **To run it, follow
-[START.md](START.md).** For everything changed in the `verixa-uni-v2`
-branch, and why, see [section 12](#12-what-changed-in-verixa-uni-v2). For the latest additions (forgot
-password, email, and live agent updates over a WebSocket), see [section 13](#13-updates-on-7-november-2026).
+**Where to read what**
 
-**Contents**
+| You want | Read |
+|---|---|
+| The whole project in a few minutes, with evaluation answers | [Section 0](#0-the-whole-project-in-one-read) below |
+| To run it | [START.md](START.md) |
+| The Test Agent in detail | [TEST_AGENT.md](TEST_AGENT.md) |
+| The Analysis Agent in detail | [AGENT_GUIDE.md](AGENT_GUIDE.md) and [section 6](#6-how-the-analysis-agent-works) |
+| What was delivered for UC4 to UC11, and the test results | [FINAL_DELIVERY.md](FINAL_DELIVERY.md) |
+| Sample files and inputs to try by hand | [samples/test-data/README.md](samples/test-data/README.md) |
+| A beginner's walk through | [README_SIMPLE.md](README_SIMPLE.md) |
 
-1. [What is included, and what is not](#1-what-is-included-and-what-is-not)
-2. [Folder structure](#2-folder-structure)
-3. [Installation and setup](#3-installation-and-setup)
-4. [Environment variables](#4-environment-variables)
-5. [Starting the app](#5-starting-the-app)
-6. [How the Analysis Agent works](#6-how-the-analysis-agent-works)
-7. [How a risk score reaches the UI](#7-how-a-risk-score-reaches-the-ui)
-8. [Database](#8-database)
-9. [API endpoints](#9-api-endpoints)
-10. [Testing](#10-testing)
-11. [Known limitations and outstanding work](#11-known-limitations-and-outstanding-work)
-12. [What changed in verixa-uni-v2](#12-what-changed-in-verixa-uni-v2)
-13. [Updates on 7 November 2026](#13-updates-on-7-november-2026)
+Sections 1 to 13 below are the detailed record of Deliverables 1 and 2 (accounts, Test Library, risk scoring).
+Where they say that test runs, evidence or Jira filing are "not started", that was true when they were written.
+Section 0 describes the project as it is now.
+
+---
+
+## 0. The whole project in one read
+
+### 0.1 The four agents
+
+| Agent | Its one job | Uses a model for | Decided by code, never by the model |
+|---|---|---|---|
+| **Manager** | Checks every answer of the others. Sends bad work back with the reason, at most 3 times, then flags it for a person | Nothing | Everything it does is plain checks |
+| **Analysis Agent** | Rates a pull request Low, Medium or High | The explanation and the suggested test areas | The risk label and score (rules in `agents/risk_rules.py`) |
+| **Test Agent** | Picks tests, checks staging, runs them, sorts failures, drafts tests for gaps | The code of a drafted test | Which tests run, and whether a failure is a real bug |
+| **Report Agent** | Explains a real bug, drafts the Jira ticket, suggests a fix as text | The likely cause, the steps and the suggested fix | Priority, assignee, and what reaches Jira |
+
+The model never calls tools. Code starts Playwright, Newman, GitHub reads and Jira writes. A model only writes text,
+and the Manager checks that text before it is used.
+
+### 0.2 The main loop, step by step
+
+```text
+1. Tester connects GitHub and Jira once, and saves the staging address          UC1   Integrations
+2. Tester uploads Playwright specs and a Postman collection                      UC2   Test Library
+3. A pull request is opened or updated on GitHub
+     -> GitHub sends a signed webhook, Verixa answers 202 at once
+     -> Analysis Agent gives a risk label with its reasons                       UC3   Risk Analysis
+4. Tester presses Run Now (the only way a run starts)                            UC4   Test Runs
+     -> Test Agent picks tests, checks staging, runs Playwright and Newman
+     -> every result is sorted: passed, real bug, temporary error,
+        deployment pending or skipped
+5. Test Agent drafts a test for changed code that no test covers                 UC5   Test Runs
+6. Tester opens a failure and sees its screenshot, trace and logs                UC6   Test Runs
+7. Report Agent drafts one ticket per real bug. Tester edits, approves,
+   and only then is it filed in Jira with the proof                              UC7   Jira Tickets
+8. Real bugs and every tester decision are saved to QA Memory                    UC8   QA Memory
+9. Tester may ask for a suggested fix. It is text only, never applied            UC9   Test Runs
+10. Tester compares two runs: new failure, fixed, still failing                  UC10  Test Runs, Compare runs
+11. Tester sees how risk and failures move over time, per module                 UC11  Risk Trends
+```
+
+### 0.3 The use cases and where their code is
+
+| Use case | Screen | Main code |
+|---|---|---|
+| UC1 Account and Project Setup | Integrations | `backend/auth.py`, `backend/api.py`, `backend/integrations.py` |
+| UC2 Test Library Upload | Test Library | `backend/validators.py`, `backend/library.py` |
+| UC3 Pull Request Risk Scoring | Risk Analysis | `agents/analysis.py`, `agents/risk_rules.py`, `agents/manager.py` |
+| UC4 One Click Test Execution | Risk Analysis, Test Runs | `backend/qa_service.py`, `backend/execution.py` |
+| UC5 Coverage Gap Test Drafting | Test Runs | `qa_service.draft_gap_tests`, `agents/report.py` |
+| UC6 Results and Evidence View | Test Runs | `execution.save_evidence`, `backend/qa_api.py` |
+| UC7 Manual File to Jira | Jira Tickets | `qa_service.draft_ticket`, `qa_service.file_ticket`, `backend/jira.py` |
+| UC8 QA Memory | QA Memory | `backend/memory.py` |
+| UC9 Suggest a Fix | Test Runs | `qa_service.suggest_fix`, `agents/report.py` |
+| UC10 Regression Comparison | Test Runs | `qa_service.compare` |
+| UC11 Cross PR Risk Trend Reporting | Risk Trends | `qa_service.trends` |
+
+### 0.4 The rules that never bend
+
+| Rule | How the code keeps it |
+|---|---|
+| A run starts only when the tester presses Run Now (BR1) | Only `POST /api/runs` starts one. A webhook only scores |
+| Nothing goes to Jira without a yes (BR2) | Only `POST /api/tickets/{id}/file` calls Jira |
+| Tests touch only staging (BR8) | The staging address is checked when saved and again before every run |
+| Code not on staging yet is not a bug (BR4) | A page that answers 404 makes the test "deployment pending" |
+| A timeout is not a bug (BR5) | A failed test is tried once more, then kept as a temporary error |
+| Only real bugs get a ticket (BR3) | The Report Agent is called for real bugs only |
+| A drafted test is unused until approved (BR11) | It sits in its own table until the tester approves it |
+| A suggested fix is text only (BR16) | Verixa has no code that writes to a repository |
+| The Manager stops after a fixed number of tries (BR7) | 3 attempts (`AGENT_MAX_ATTEMPTS`), then "needs review" |
+| Secrets stay out of tickets, memory and models (BR10) | `agents/redact.py` hides keys, tokens and passwords first |
+
+### 0.5 How the risk label is decided
+
+The label comes from rules, not from the model.
+
+- **A module with bug history:** the files changed, the module and its past bug count are weighed. Past bugs come
+  from GitHub (bug fix commits and bug issues) and from QA Memory (real bugs Verixa itself found there).
+- **A module without history:** the number of files and lines changed decides.
+- Minimum labels: security or payment code is at least High, user, data or config code is at least Medium, and a
+  failing CI build on the commit makes it High.
+- The model then writes the explanation and the test areas. If it doubts the label, that is shown as a "concern"
+  note. The label does not change.
+- The tester can mark a label wrong. The label stays, and the remark is saved to QA Memory.
+
+### 0.6 Security in short
+
+- **Sign in:** email and password (hashed with scrypt), or GitHub. Two step verification is optional. Five wrong
+  passwords lock the login for a while.
+- **Tokens:** GitHub and Atlassian tokens are encrypted before they are stored.
+- **Webhook:** accepted only with a valid signature.
+- **Every change** checks that it comes from the Verixa site itself, not from another website.
+- **Accounts are separate:** a row of another account answers 404.
+- **Uploaded tests:** may import only `@playwright/test`. `require`, `process`, `eval`, `child_process` and
+  `file://` are refused in the browser and again on the server.
+- **Running tests:** each run has its own folder, no secrets in its environment and a time limit.
+- **Secrets:** keys, tokens and passwords are removed from error text, logs, ticket text (also what the tester
+  typed), memory entries and everything sent to a model. The browser trace is never attached to Jira, because it
+  records everything the browser sent.
+
+### 0.7 All endpoints
+
+Every `/api` route needs a signed in account. **401** always means the session is gone.
+
+| Area | Endpoints |
+|---|---|
+| Account | `POST /auth/signup`, `/auth/verify-email`, `/auth/login`, `/auth/logout`, `/auth/forgot`, `/auth/reset` |
+| GitHub and Jira sign in | `GET /auth/github`, `/auth/start`, `/auth/github/callback`, `/auth/atlassian/callback`, `POST /auth/relink` |
+| Two step verification | `/auth/2fa/setup`, `/enable`, `/disable`, `/verify`, `/recovery-codes` |
+| Profile | `POST /api/account/name`, `/password`, `/delete` |
+| Project | `GET /api/session`, `/api/targets`, `POST /api/connect`, `/api/disconnect`, `/api/project/staging` |
+| Test Library | `POST /api/library/apply` (saves everything or nothing) |
+| Webhook | `POST /webhooks/github` (signed, answers 202) |
+| Risk | `GET /api/analysis/pull-requests`, `/pull-requests/{id}`, `POST /api/analysis/analyse`, `/pull-requests/{id}/wrong-label` |
+| Runs | `POST /api/runs` (Run Now), `GET /api/runs`, `/api/runs/{id}`, `/api/evidence/{id}` |
+| Drafted tests | `GET /api/drafts`, `POST /api/drafts/{id}/decision` |
+| Tickets | `GET /api/tickets`, `POST /api/tickets/{id}` (edit), `/file`, `/reject` |
+| Suggested fix | `POST /api/results/{id}/fix`, `/api/fixes/{id}/decision` |
+| Compare and trends | `GET /api/compare`, `/api/trends?days=7|30|90|365&module=` |
+| QA Memory | `GET /api/memory`, `POST /api/memory/{id}/delete` |
+| Live progress | WebSocket `/api/live` |
+
+### 0.8 Technology and why
+
+| Part | Technology | Why |
+|---|---|---|
+| Dashboard | React and TypeScript, built with Vite | The SRS asks for it. Served by the same server |
+| Backend | Python, FastAPI | One server for the API, the webhook and the pages |
+| Agents | Google ADK for the Analysis Agent, plain Python loops for the others | The Manager pattern is the same everywhere: work, check, send back |
+| Models | Groq, OpenRouter and Gemini through LiteLLM | Each task has a list of models. If one fails, the next is tried |
+| Test tools | Playwright and Newman on Node.js | The tester's own tests run unchanged |
+| Database | PostgreSQL, with pgvector when it is installed | pgvector finds similar past failures inside the database |
+| Proof | Files on the server disk | The database stores only their paths |
+
+### 0.9 Tests
+
+| Level | Where | Result |
+|---|---|---|
+| Unit, integration, system | `tests/*.py` | 515 tests pass |
+| Browser, whole app | `tests/e2e/*.spec.ts` | 162 pass, 1 skipped on purpose (it needs a real mailbox) |
+| 68 inputs: correct, negative, edge and attack | `tests/e2e/inputs.spec.ts` | 68 of 68 pass |
+
+Python tests are started as `python -m unittest tests.<module>`. They use their own test database and refuse to
+start any other way, so the real database is never touched.
+
+### 0.10 Honest limits
+
+- The risk rules were measured on 30 examples the team wrote (26 correct, 87%). Accuracy on real projects is not
+  measured yet.
+- The pgvector search path is built but not covered by an automated test, because the tests run on SQLite.
+- Checking the text of uploaded test code cannot catch every disguise. Each run is also isolated, and on a public
+  server the app should run as a low privilege user or in a container.
+- A one command way to start a run (TBD8) is not built. Run Now is the only way, which keeps BR1 simple.
+- Login rate limits are counted in memory, so they reset when the server restarts.
+
+### 0.11 Questions an evaluator may ask
+
+- **Why agents and not one script?** Each agent has one job, and the Manager checks each answer before the next
+  step, so one bad model answer cannot travel through the whole loop.
+- **Can the model change the risk label?** No. Rules decide it. The model only explains it.
+- **What if the model is down or talks nonsense?** The next model in the list is tried. After 3 failed checks the
+  item is flagged for a person. A real bug still gets a ticket draft, marked "needs review".
+- **What if someone writes "ignore your rules" in a pull request title?** Text from a pull request or a test run is
+  passed to the model as data, with an instruction never to follow it, and the label is not the model's to change.
+- **How do you know a failure is a real bug?** It is not a 404 on staging (deployment pending) and not a timeout
+  or network error after a second try (temporary error). Everything else is a real bug.
+- **How does Verixa learn?** Real bugs and tester decisions are saved to QA Memory. They raise the bug history of a
+  module, add specs that failed there before to the next run, and are shown to the Report Agent as similar cases.
+- **Can Verixa change our code?** No. A suggested fix is text. There is no code that writes to a repository.
+- **What happens to passwords and keys in logs?** They are replaced by `[HIDDEN SECRET]` before the text is stored,
+  sent to a model or sent to Jira.
 
 ---
 
@@ -75,7 +236,7 @@ analysis result to show. It is Farheen's task and it is implemented, so it is in
 |---|---|
 | **T-034** Yes/no risk questions + majority vote of 3 | Not implemented anywhere in multi-agents. The agent uses deterministic rules plus a single model call for the explanation only. Still TODO |
 | Test & Execution Agent (`test_agent/`, `manager_agent/test_phase.py`) | Still in its testing phase, and Deliverable 3 scope. `tests/test_analysis_integration.py` asserts it has not crept in |
-| Test run, evidence, Jira filing, drafted tests | Deliverables 3 to 5, not started |
+| Test run, evidence, Jira filing, drafted tests | Not part of Deliverables 1 and 2. **Built since**: see [section 0](#0-the-whole-project-in-one-read) and [FINAL_DELIVERY.md](FINAL_DELIVERY.md) |
 
 ---
 
@@ -676,8 +837,7 @@ tasks yet.
   had read the rules, so they are a draft: the team should review them and add real pull requests
   before relying on the number. It measures the rule-based label, not the model's explanation.
 * Deliverables 3 to 5 — test selection and running, evidence, the Report Agent and Jira filing —
-  are not started. The rail still shows Test Runs, Evidence, Jira Sync and Agent Logs as
-  Coming Soon.
+  are now built, together with the four FYP II features. See [section 0](#0-the-whole-project-in-one-read).
 
 ### Smaller things
 

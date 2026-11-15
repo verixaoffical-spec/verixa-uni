@@ -29,3 +29,7 @@ tests.txt
 # Frontend dependencies and build output (npm install, npm run build)
 node_modules/
 frontend/dist/
+
+# Python packages for the Microsoft Store Python, when a .venv cannot be used
+.pydeps/
+.venv-*/

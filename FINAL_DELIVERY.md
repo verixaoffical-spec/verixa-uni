@@ -44,7 +44,7 @@ Nothing reaches Jira until the tester presses "Approve and file in Jira" (BR2).
 | TBD6 approved drafted test | It is added to the Test Library and runs on the next Run Now |
 | TBD7 editing the ticket | The tester can edit title, likely cause, steps and priority. Priority starts from the risk label, and the suggested assignee is the pull request's author |
 | TBD8 one command run | Not built. Run Now is the only way |
-| TBD13 marking a label wrong | Not built. The label comes from rules, and the model's doubt is shown as a "concern" note |
+| TBD13 marking a label wrong | A tester can mark a label wrong and say which label was expected. The label stays (it comes from rules); the remark is saved to QA Memory (Req 8.1) and shown with later labels of the same module |
 | TBD15 memory entries | A tester can remove a wrong entry. Entries are kept until then |
 | TBD16 Suggest a Fix | A button on each real bug. Nothing is written automatically |
 | TBD17 trends | Periods of 7, 30, 90 or 365 days. At least 3 scored pull requests (`TREND_MIN_PULL_REQUESTS`). No export |
@@ -65,6 +65,9 @@ All limits are in `.env` (see the end of `.env.example`), and none is fixed in c
 - Proof is served only from inside the evidence folder, and only to its owner. Secrets are removed from logs, ticket
   text, memory entries and everything sent to a model. Text from a run is passed to models as data, never as instructions.
 - A suggested fix is text only. Verixa has no code that writes to a repository.
+- What goes to Jira: the ticket text has keys, tokens and passwords removed, also from what the tester typed. The
+  screenshot and the cleaned logs are attached. The raw browser trace is not, because it records everything the
+  browser sent. It stays downloadable in Verixa for its owner (proven by `tests/test_qa_flow.py`).
 
 **Honest limit:** checking the text of uploaded code cannot catch every disguise. Every run is already isolated:
 it has no secrets in its environment, a time limit and its own folder. On a shared or public server, also run the
@@ -77,10 +80,13 @@ app as a low privilege user or in a container.
 | Unit | `tests/test_qa_units.py`: staging rules, test selection, report parsing, evidence, agent checks, Manager loop, memory vectors | pass |
 | Integration | `tests/test_qa_flow.py`: every new route through the real app and database, mostly negative and attack inputs | pass |
 | System | `tests/test_qa_system.py`: real Playwright and Newman against a staging app with bugs on purpose | pass |
-| UAT / UX | `tests/e2e/qa.spec.ts`: the whole loop in a real browser, plus another account, XSS and phone width | 13 of 13 pass |
+| UAT / UX | `tests/e2e/qa.spec.ts`: the whole loop in a real browser, plus another account, XSS and phone width | 14 of 14 pass |
+| Inputs | `tests/e2e/inputs.spec.ts`: 68 correct, negative, edge and attack inputs across the whole app. The table of results is written to `tests/e2e/test-results/inputs.md` | 68 of 68 pass |
 | Regression | every earlier Python and browser test | pass |
 
-All Python tests together: 459. All browser projects: 154 passed and 1 skipped on purpose (it was skipped before).
+All Python tests together: 515. All browser projects: 162 passed and 1 skipped on purpose (it needs a real mailbox).
+
+Without a `.venv`, set `VERIXA_PYTHON` to the Python to use (and `PYTHONPATH` to `.pydeps`) before running the browser tests.
 
 ## Setup after pulling
 

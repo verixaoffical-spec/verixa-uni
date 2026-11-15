@@ -13,6 +13,7 @@ import { ApiError, api, openLive, qa, type Assessment, type LiveEvent, type Risk
 import { icons } from './icons';
 import { Chip, hookLabel, type HookState, type Link } from './connection';
 import { useToast } from './Toast';
+import { MemoryUsedList } from './qa';
 
 interface Props {
   hidden: boolean;
@@ -126,8 +127,18 @@ function StateBadge({ state }: { state: Assessment['state'] }) {
   );
 }
 
-function Detail({ row }: { row: Assessment }) {
+function Detail({ row, onChange }: { row: Assessment; onChange: () => void }) {
+  const toast = useToast();
   const raised = row.base_label && row.risk_label && row.base_label !== row.risk_label;
+  async function markWrong(expected: RiskLabel) {
+    try {
+      await api.markWrong(row.id, expected);
+      toast('Saved to QA Memory. The label stays as the rules gave it');
+      onChange();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'The label could not be marked');
+    }
+  }
   return (
     <tr>
       <td className="rdetail" colSpan={6}>
@@ -173,7 +184,17 @@ function Detail({ row }: { row: Assessment }) {
             </div>
           )}
 
+          <MemoryUsedList items={row.memory_used} />
+
           <div className="rmeta">
+            {row.marked_wrong && <Chip on={false}>you marked this label wrong</Chip>}
+            {row.state === 'scored' && row.risk_label && !row.marked_wrong && (
+              <select className="rwrong" aria-label="Mark this label as wrong" value=""
+                      onChange={e => e.target.value && markWrong(e.target.value as RiskLabel)}>
+                <option value="">Label wrong? I expected…</option>
+                {(['High', 'Medium', 'Low'] as RiskLabel[]).filter(l => l !== row.risk_label).map(l => <option key={l}>{l}</option>)}
+              </select>
+            )}
             {row.module && <Chip on={false}>module {row.module}</Chip>}
             {row.files_changed !== null && (
               <Chip on={false}>{row.files_changed} file{row.files_changed === 1 ? '' : 's'}, {row.lines_changed ?? 0} lines</Chip>
@@ -435,7 +456,7 @@ export default function RiskView({ hidden, link, hook, staging, onGoConnect, onR
                       </button>
                     </td>
                   </tr>
-                  {open === row.id && <Detail row={row} />}
+                  {open === row.id && <Detail row={row} onChange={load} />}
                 </tbody>
               ))}
             </table>

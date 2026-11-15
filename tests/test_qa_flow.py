@@ -362,6 +362,27 @@ class TicketTests(QaTestCase):
             self.assertEqual(jira.call_count, 1)
         self.assertEqual(count(ApprovalLog, action_type="ticket", decision="approved"), 1)
 
+    def test_a_password_or_key_never_reaches_jira(self):
+        """Req 7.3: secrets in the error, in what the tester typed and in the browser trace all stay out of Jira."""
+        key, password = "ghp_" + "k" * 36, "hunter2pass"
+        self.pw = pw_report(("cart total is right", "unexpected", f"Expected: 20 Received: 30 token {key} password='{password}'"))
+        ticket = self.start(self.ready())["tickets"][0]
+        edit = {"title": f"Cart total wrong, api_key={key}", "root_cause": f"The total is doubled. password = '{password}'",
+                "steps": [f"Log in with password: '{password}'", "Open the cart"], "priority": "High"}
+        self.assertEqual(self.client.post(f"/api/tickets/{ticket['id']}", json=edit).status_code, 200)
+        with SessionLocal() as db:  # a trace, as a real run saves one
+            (self.evidence / "trace.zip").write_bytes(b"raw browser traffic")
+            db.add(Evidence(result_id=ticket["result_id"], evidence_type="trace", file_path="trace.zip"))
+            db.commit()
+        with mock.patch("backend.qa_service.file_issue", return_value=("QA-13", None, [])) as jira:
+            self.assertEqual(self.client.post(f"/api/tickets/{ticket['id']}/file").status_code, 200)
+        args = jira.call_args.args
+        sent = args[3] + json.dumps(args[4]) + "".join(p.read_text(encoding="utf-8") for p in args[6])
+        self.assertNotIn(key, sent)
+        self.assertNotIn(password, sent)
+        self.assertIn("[HIDDEN SECRET]", sent)
+        self.assertNotIn("trace.zip", [p.name for p in args[6]])
+
     def test_the_same_bug_on_the_same_pull_request_gets_one_ticket(self):
         aid = self.ready()
         self.start(aid)

@@ -6,6 +6,8 @@ import httpx
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from agents.redact import hide_secrets
+
 from .db import User
 from .integrations import _call, _ok, atlassian_access_token
 
@@ -18,7 +20,7 @@ def _adf(blocks: list[tuple[str, str]]) -> dict:
     for kind, text in blocks:
         if not text:
             continue
-        node = {"type": "text", "text": text[:30000]}
+        node = {"type": "text", "text": hide_secrets(text)[0][:30000]}  # also what the tester typed (Req 7.3)
         if kind == "heading":
             content.append({"type": "heading", "attrs": {"level": 3}, "content": [node]})
         elif kind == "code":
@@ -38,7 +40,8 @@ def describe(ticket, test_title: str, error: str, pr: str, risk: str | None) -> 
         ("heading", "Suggested assignee"), ("paragraph", ticket.assignee or "not suggested"),
         ("heading", "Suggested fix (text only, not applied)") if ticket.fix_text else ("paragraph", ""),
         ("code", ticket.fix_text or ""),
-        ("paragraph", "Secrets such as keys, tokens and passwords were removed from the attached logs."),
+        ("paragraph", "Secrets such as keys, tokens and passwords were removed from this text and the attached logs. "
+                      "The browser trace is kept in Verixa and not attached, because it records everything the browser sent."),
     ])
 
 

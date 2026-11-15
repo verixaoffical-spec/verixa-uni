@@ -157,3 +157,65 @@ Try-It "/api/analysis/analyse" '{"pr_number":4}'                    # 401, not l
 ```powershell
 .\.venv\Scripts\python.exe -m unittest tests.test_validators tests.test_library tests.test_accounts tests.test_crud tests.test_twofactor tests.test_risk_rules tests.test_analysis_integration tests.test_qa_security
 ```
+
+## 10. Staging address, Run Now, tickets and trends (UC4 to UC11)
+
+**Staging address** (Integrations, step "Staging app"). Every row except the last must be refused.
+
+| Try this | Expected message |
+|---|---|
+| (empty) | Enter the staging address |
+| `ftp://files.example.com` or `javascript:alert(1)` | Use an http:// or https:// address |
+| `http://169.254.169.254/latest/meta-data` | That address is not allowed |
+| `http://[::ffff:169.254.169.254]/` | That address is not allowed |
+| `http://user:secret@staging.example.com` | Leave the user name and password out of the address |
+| `http://staging.example.com/?debug=1` | Leave ? and # parts out of the address |
+| `http://localhost:8000` (Verixa's own address) | That is the Verixa server itself |
+| `http://no-such-host.invalid` | could not be found. Check the address |
+| The real address of your staging app | Saved, with the status code it answered |
+
+**Run Now** (Risk Analysis). Upload `shoplite/shoplite-cart.spec.ts` and `shoplite/shoplite.postman_collection.json` first.
+
+| Do this | Expected |
+|---|---|
+| Press Run Now with no staging address saved | A message with an **Open Integrations** button |
+| Press Run Now on a High risk pull request | The run opens with live progress, then sorted results |
+| Press Run Now again while it is running | "already in progress" |
+| Stop the staging app, then press Run Now | "Staging ... is not answering" |
+| A spec whose page answers 404 on staging | Marked **deployment pending**, never failed |
+
+**Ticket draft** (Test Runs, a real bug). Each of the first four must be refused; nothing reaches Jira until you approve.
+
+| Try this | Expected |
+|---|---|
+| Title `abc` | Refused: too short |
+| Remove every step | Refused |
+| More than 20 steps | Refused |
+| Title `Cart <img src=x onerror=alert(1)> total` | Saved and shown as plain text, with no alert |
+
+**Addresses to paste while logged in**
+
+| Address | Expected |
+|---|---|
+| `/api/trends?days=30` | Data |
+| `/api/trends?days=5` or `/api/trends?days=abc` | 422: only 7, 30, 90 and 365 are offered |
+| `/api/evidence/0` | 422 |
+| `/api/evidence/..%2F..%2F.env` | 404 |
+| `/api/runs/1` as `other@verixa.dev` | 404: a run of another account cannot be seen |
+
+**Risk label marked wrong** (Risk Analysis, open a scored pull request, "Label wrong? I expected…")
+
+| Do this | Expected |
+|---|---|
+| Pick a label other than the one shown | "Saved to QA Memory". The label itself does not change |
+| Open QA Memory | A new entry "Risk label ... was marked wrong" |
+| Open a later pull request in the same module | The entry is listed under "QA Memory used" |
+| Send the same label it already has, or mark it twice (API) | 422, then 409 |
+
+All of these, 68 inputs in total, are also run automatically:
+
+```powershell
+cd tests\e2e; npx playwright test --project=inputs
+```
+
+The table of every input and its result is written to `tests/e2e/test-results/inputs.md`.

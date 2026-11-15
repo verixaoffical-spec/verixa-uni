@@ -1032,3 +1032,22 @@ Team ne 30 misaal PRs khud likhe, aur har ek ka sahi label bhi khud rakha. Rules
 Isi tarah, in examples ko likhne wale ko rules pehle se pata thay. Real projects ke PRs par accuracy kam ya zyada ho sakti hai, aur woh abhi naapi nahi gayi.
 
 **Mentor ke liye ek line:** "87% hamare 30 labelled examples par hai. Real projects ki accuracy nahi hai. Agla qadam real PRs ko labels ke saath test karna hai."
+
+### TBD8 (ek command se run) kyun nahi banaya?
+
+SRS khud isay "open" rakhta hai: Req 4.1 kehta hai run sirf **Run Now** se shuru hoga, aur ek command wala tareeqa TBD8 hai, yaani "baad mein faisla". Team ka faisla (FINAL_DELIVERY.md) yeh hai: nahi banaya.
+
+**Wajah:** BR1 kehta hai run sirf tab chale jab tester khud click kare. Agar ek command bhi ho, to koi script usay khud chala sakti hai, aur "insaan ka control" kamzor ho jata hai.
+
+**Mentor ke liye ek line:** "TBD8 SRS mein zaroori nahi tha. Hum ne Run Now ko hi akela raasta rakha, taake BR1 (human control) na toote."
+
+### pgvector use hota hai ya nahi? Tests mein kyun nahi chala?
+
+Code mein dono raaste hain (`backend/memory.py`):
+
+- **PostgreSQL + pgvector ho:** milti julti purani failures database ke andar hi dhoondi jati hain (Req 8.3).
+- **pgvector na ho, ya SQLite ho:** wohi vectors Python mein compare hote hain. Jawab wohi aata hai, bas thora aahista.
+
+Asal app `.env` ke PostgreSQL par chalti hai, to wahan pgvector wala raasta chalta hai agar extension install ho. Tests jaan boojh kar SQLite ki alag, temporary file par chalte hain, taake asal database ko kabhi haath na lage. SQLite mein pgvector hota hi nahi, is liye tests mein sirf doosra raasta check hua.
+
+**Mentor ke liye ek line:** "pgvector app mein hai, magar automated tests SQLite par hain, is liye pgvector wala raasta abhi test se sabit nahi hua. Yeh hamari ek limitation hai."

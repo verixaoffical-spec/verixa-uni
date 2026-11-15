@@ -233,7 +233,7 @@ def script_test_agent() -> None:
         return {"likely_cause": f"The test {test} fails because {error.splitlines()[0][:120]}. The cart total or the orders "
                                 "endpoint returns the wrong value.", "steps": ["Open the shop", "Look at the cart total"], "model": "scripted"}
 
-    async def draft(module, code, name, feedback):
+    async def draft(module, code, name, feedback, memory=None):
         return {"code": "import { test, expect } from '@playwright/test';\n"
                         f"test('{module} page opens', async ({{ page }}) => {{ await page.goto('/'); await expect(page.locator('h1')).toBeVisible(); }});\n",
                 "model": "scripted"}

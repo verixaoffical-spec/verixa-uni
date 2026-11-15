@@ -63,6 +63,9 @@ export default function TicketsView({ hidden, link, onGoConnect, onOpenRun }: Pr
                   {t.flagged && <Tag cls="warn">needs review</Tag>}
                   {t.jira_key && <Tag cls="ok">{t.jira_key}</Tag>}
                 </button>
+                {t.jira_url && open !== t.id && (
+                  <a className="btn ghost sm qjira" href={t.jira_url} target="_blank" rel="noopener noreferrer">Open {t.jira_key} in Jira</a>
+                )}
                 {open === t.id && (
                   <div className="qcard-body">
                     {t.run_id && <button className="btn ghost sm" onClick={() => onOpenRun(t.run_id!)}>See the failure and its proof in run #{t.run_id}</button>}

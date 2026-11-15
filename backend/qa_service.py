@@ -28,7 +28,7 @@ from .agent_db import RiskAssessment
 from .db import Collection, Project, SessionLocal, SpecFile, User, now
 from .integrations import github_access_token
 from .jira import describe, file_issue
-from .memory import remember, similar
+from .memory import for_module, remember, similar
 from .qa_db import (
     DraftTicket, Evidence, FixSuggestion, MemoryEntry, TestDraft, TestResult, TestRun, loads, log_decision,
 )
@@ -341,8 +341,10 @@ async def draft_gap_tests(run_id: int, specs: dict[str, str], collection_text: s
         name = _draft_name(module, taken)
         taken.add(name.lower())
         step(run, f"Test Agent is drafting {name}: no test covers {module}")
+        with SessionLocal() as db:
+            past = for_module(db, run.project_id, module)  # real bugs found in this module before (Req 8.6)
         answer, _, problems = await supervise(
-            "test_draft", lambda fb: report.draft_test(module, code or f"(changes in {module})", name, fb),
+            "test_draft", lambda fb: report.draft_test(module, code or f"(changes in {module})", name, fb, [m["text"] for m in past]),
             lambda a: report.check_draft(a, module, validate_spec), f"{run.repo}#{run.pr_number}")
         if answer is None:
             ok = False
@@ -350,7 +352,7 @@ async def draft_gap_tests(run_id: int, specs: dict[str, str], collection_text: s
             continue
         with SessionLocal() as db:
             db.add(TestDraft(project_id=run.project_id, run_id=run_id, module=module[:200], file_name=name,
-                             code=answer["code"], model_used=answer.get("model")))
+                             code=answer["code"], model_used=answer.get("model"), memory_used=json.dumps(past)))
             db.commit()
         step(run, f"Drafted {name}. It waits for your approval", "ok")
     return ok
@@ -384,10 +386,11 @@ def file_ticket(db: Session, user: User, project: Project, ticket: DraftTicket) 
         raise HTTPException(409, "Link Atlassian first")
     result = db.get(TestResult, ticket.result_id)
     run = db.get(TestRun, result.run_id)
-    proofs = [p for e in db.scalars(select(Evidence).where(Evidence.result_id == result.id))
+    # The raw trace records every request the browser made, passwords included, so it never leaves Verixa (Req 7.3)
+    proofs = [p for e in db.scalars(select(Evidence).where(Evidence.result_id == result.id, Evidence.evidence_type != "trace"))
               if (p := ex.evidence_file(e.file_path))]
     try:
-        key, url, problems = file_issue(db, user, project.jira_key, ticket.title,
+        key, url, problems = file_issue(db, user, project.jira_key, hide_secrets(ticket.title)[0],
                                         describe(ticket, result.title, result.error_message or "", f"PR #{run.pr_number}", run.risk_label),
                                         ticket.priority, proofs)
     except HTTPException as exc:
@@ -571,7 +574,8 @@ def result_json(r: TestResult, evidence: list[Evidence]) -> dict:
 
 def draft_json(d: TestDraft) -> dict:
     return {"id": d.id, "run_id": d.run_id, "module": d.module, "file_name": d.file_name, "code": d.code,
-            "status": d.status, "model_used": d.model_used, "created_at": _iso(d.created_at)}
+            "status": d.status, "model_used": d.model_used, "created_at": _iso(d.created_at),
+            "memory_used": loads(d.memory_used, [])}
 
 
 def ticket_json(db: Session, t: DraftTicket) -> dict:

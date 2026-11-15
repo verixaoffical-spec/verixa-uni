@@ -70,7 +70,11 @@ export interface Assessment {
   errors: string[];
   created_at: string | null;
   updated_at: string | null;
+  marked_wrong: boolean;            // the tester said this label is wrong (saved to QA Memory)
+  memory_used: MemoryUsed[];        // QA Memory entries about this module when it was scored (Req 8.6)
 }
+
+export interface MemoryUsed { id: number; text: string; pr_number: number | null }
 
 export interface RiskFeed {
   project: { repo: string; jira_key: string; webhook_verified: boolean } | null;
@@ -119,6 +123,8 @@ export const api = {
   // Scores a pull request now instead of waiting for GitHub. Runs the agent and answers when done,
   // so it can take as long as the model chain takes.
   analysePr: (prNumber: number) => request<Assessment>('/api/analysis/analyse', { pr_number: prNumber }),
+  // The label stays as the rules gave it. The tester's view is saved to QA Memory.
+  markWrong: (id: number, expected: RiskLabel) => request<Assessment>(`/api/analysis/pull-requests/${id}/wrong-label`, { expected }),
 
   // Two-step verification. Changing it asks for the password again, and turning it off also asks for a code.
   twoFactor: () => request<TwoFactorStatus>('/auth/2fa'),
@@ -252,11 +258,11 @@ export interface Ticket {
   model_used: string | null;
   created_at: string | null;
   filed_at: string | null;
-  memory_used: { id: number; text: string; pr_number: number | null }[];
+  memory_used: MemoryUsed[];
 }
 
 export interface Fix { id: number; result_id: number; diff: string; explanation: string; status: 'Suggested' | 'Added' | 'Discarded'; model_used: string | null }
-export interface Draft { id: number; run_id: number; module: string; file_name: string; code: string; status: 'Drafted' | 'Approved' | 'Rejected'; model_used: string | null; created_at: string | null }
+export interface Draft { id: number; run_id: number; module: string; file_name: string; code: string; status: 'Drafted' | 'Approved' | 'Rejected'; memory_used: MemoryUsed[]; model_used: string | null; created_at: string | null }
 export interface RunDetail { run: Run; results: Result[]; tickets: Ticket[]; fixes: Fix[]; drafts: Draft[] }
 
 export interface Comparison {

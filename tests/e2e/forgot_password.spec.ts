@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const PYTHON = path.resolve(__dirname, '../../.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+const PYTHON = process.env.VERIXA_PYTHON || path.resolve(__dirname, '../../.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
 const INBOX = path.join(os.tmpdir(), 'verixa-e2e-mail.jsonl');
 const ORIGINAL = 'Original-Pass-2026';
 const NEW = 'Fresh-Start-2027';

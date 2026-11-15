@@ -55,6 +55,14 @@ function RunDetailView({ detail, onDetail }: { detail: RunDetail; onDetail: (d: 
         <Tag cls={RUN_STATUS[run.status].cls}>{RUN_STATUS[run.status].text}</Tag>
       </div>
       {run.status === 'running' && <div className="qprogress"><i></i>{run.step || 'Working'}…</div>}
+      {run.status === 'running' && (
+        <p className="qmuted">The tests run in a real browser against your staging app, so a run usually takes 1 to 2 minutes.
+          A slow staging app or network makes it longer. You can leave this page: the run goes on.</p>
+      )}
+      {run.counts.temporary_error > 0 && (
+        <p className="qmuted">Temporary errors are timeouts or network problems between the tests and your staging app.
+          Each was tried twice. They are not bugs and not a Verixa fault: check that staging is up, then run again.</p>
+      )}
       {run.error && <div className="warnbox" role="alert">{run.error}</div>}
       {run.status === 'flagged' && <div className="warnbox">The Manager agent could not accept some agent output after every attempt. Check the flagged items below.</div>}
       <Counts run={run} />

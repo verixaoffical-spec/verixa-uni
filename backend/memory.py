@@ -103,6 +103,20 @@ def similar(db: Session, project_id: int, value: str, kinds: tuple[str, ...] = (
         return []
 
 
+def for_module(db: Session, project_id: int, module: str | None, kinds: tuple[str, ...] = ("real_bug",),
+               limit: int = 5) -> list[dict]:
+    """The newest entries about one module, as {id, text, pr_number}. [] when memory is unavailable (Req 8.8)."""
+    if not module:
+        return []
+    try:
+        rows = db.scalars(select(MemoryEntry).where(MemoryEntry.project_id == project_id, MemoryEntry.module == module,
+                                                    MemoryEntry.kind.in_(kinds)).order_by(MemoryEntry.id.desc()).limit(limit))
+        return [{"id": e.id, "text": e.text[:200], "pr_number": e.pr_number} for e in rows]
+    except Exception as exc:
+        log.warning("QA Memory could not be read: %s", exc)
+        return []
+
+
 def real_bugs_in_module(repo: str, module: str) -> int:
     """How many real bugs Verixa itself found in this module. The Analysis Agent adds it to the module's bug history."""
     from .db import SessionLocal

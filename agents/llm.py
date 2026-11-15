@@ -4,7 +4,11 @@ Each task tries its models in order and moves to the next on any failure
 import json
 import os
 import re
+import time
+
 import litellm
+
+from .trace import trace
 
 DEFAULT_CHAINS = {
     # PR analysis: explanation and test areas (the risk label itself is computed by rules)
@@ -60,6 +64,7 @@ async def ask(task: str, system: str, user: str, as_json: bool = True, timeout: 
         kwargs = {}
         if model.startswith("groq/") and "gpt-oss" in model:
             kwargs["extra_body"] = {"include_reasoning": False}
+        started = time.perf_counter()
         try:
             resp = await litellm.acompletion(
                 model=model, temperature=0, timeout=timeout,
@@ -67,7 +72,11 @@ async def ask(task: str, system: str, user: str, as_json: bool = True, timeout: 
                 **kwargs,
             )
             text = resp.choices[0].message.content or ""
+            usage = getattr(resp, "usage", None)
+            trace("llm.call", task=task, model=model, ms=round((time.perf_counter() - started) * 1000),
+                  tokens_in=getattr(usage, "prompt_tokens", None), tokens_out=getattr(usage, "completion_tokens", None))
             return (parse_json(text) if as_json else strip_code(text)), model
         except Exception as e:
+            trace("llm.failed", task=task, model=model, ms=round((time.perf_counter() - started) * 1000), error=str(e)[:200])
             errors.append(f"{model}: {type(e).__name__}: {str(e)[:120]}")
     raise RuntimeError("All models failed: " + " | ".join(errors))

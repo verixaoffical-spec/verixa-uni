@@ -29,7 +29,7 @@ test.afterEach(async () => {
 const toast = (p: Page) => p.locator('.toast.on');
 
 async function waitForRun(p: Page) {
-  await expect(p.locator('.qsummary .qtag')).not.toHaveText(/Running/, { timeout: 90_000 });
+  await expect(p.locator('.qsummary .qtag')).not.toHaveText(/Running/, { timeout: 240_000 });
 }
 
 test('UC4 without a staging address Run Now explains what to do', async () => {
@@ -178,6 +178,16 @@ test('UC8 QA Memory lists what was learned and a wrong entry can be removed', as
   await rows.first().getByRole('button', { name: /Remove memory entry/ }).click();
   await expect(toast(page)).toContainText('Memory entry removed');
   await expect(rows).toHaveCount(before - 1);
+});
+
+test('UC8 a risk label can be marked wrong, and that is saved to QA Memory', async () => {
+  await openRisk(page);
+  await page.locator('tr.risk-row', { hasText: '#1' }).first().click();
+  await page.getByLabel('Mark this label as wrong').selectOption({ index: 1 });
+  await expect(toast(page)).toContainText('Saved to QA Memory');
+  await expect(page.getByText('you marked this label wrong')).toBeVisible();
+  await page.goto('/verixa_prototype.html#memory');
+  await expect(page.getByText(/was marked wrong/).first()).toBeVisible();
 });
 
 test('another account sees none of it, on screen or through the API', async ({ browser, baseURL }) => {

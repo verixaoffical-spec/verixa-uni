@@ -21,7 +21,7 @@ TICKET_STATES = ("Drafted", "Filed", "Rejected")
 
 class TestRun(Base):
     __tablename__ = "qa_runs"
-    __test__ = False  # not a unittest class
+    __test__ = False  # a database table, not a test class
     id: Mapped[int] = mapped_column(primary_key=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
     repo: Mapped[str] = mapped_column(String(200))
@@ -73,6 +73,7 @@ class TestDraft(Base):
     file_name: Mapped[str] = mapped_column(String(255))
     code: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(10), default="Drafted")
+    memory_used: Mapped[str | None] = mapped_column(Text)      # JSON list of {id, text, pr_number} (Req 8.6)
     model_used: Mapped[str | None] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
@@ -118,7 +119,7 @@ class ApprovalLog(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
-    action_type: Mapped[str] = mapped_column(String(20))   # run_start, test_draft, ticket, fix, memory_delete
+    action_type: Mapped[str] = mapped_column(String(20))   # run_start, test_draft, ticket, fix, memory_delete, risk_label
     target_id: Mapped[int]
     decision: Mapped[str] = mapped_column(String(20))
     decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
@@ -131,7 +132,7 @@ class MemoryEntry(Base):
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
     repo: Mapped[str] = mapped_column(String(200), index=True)
     module: Mapped[str | None] = mapped_column(String(200))
-    kind: Mapped[str] = mapped_column(String(20))           # real_bug, temporary_error, test_draft, ticket
+    kind: Mapped[str] = mapped_column(String(20))           # real_bug, temporary_error, test_draft, ticket, risk_label
     pr_number: Mapped[int | None]
     text: Mapped[str] = mapped_column(Text)
     decision: Mapped[str | None] = mapped_column(String(20))

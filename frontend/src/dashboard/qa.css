@@ -77,6 +77,7 @@
   .qcard-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;width:100%;padding:12px 14px;background:var(--soft);border:0;text-align:left;}
   .qcard-head .qtitle{flex:1;min-width:200px;}
   .qcard-head:hover{background:hsl(var(--accent)/.06);}
+  .qjira{display:inline-flex;margin:10px 14px 12px;}
   .qcard-body{padding:14px;}
   .qbars{display:flex;align-items:flex-end;gap:6px;height:170px;padding-top:10px;border-bottom:1px solid var(--hair);overflow-x:auto;}
   .qbar{flex:1;min-width:26px;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;}
@@ -96,7 +97,7 @@
   .qmemrow{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--hair);}
   .qmemrow > div{min-width:0;flex:1;}
   .qmemhead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:6px;}
-  .qmemrow pre{color:hsl(var(--muted-foreground));max-height:120px;overflow:auto;}
+  .qmemrow pre{color:hsl(var(--muted-foreground));max-height:160px;overflow:auto;padding-right:10px;}
 
   @media (max-width:760px){
     .qside,.qrow{grid-template-columns:1fr;}

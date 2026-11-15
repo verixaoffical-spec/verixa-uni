@@ -17,6 +17,7 @@ const KIND: Record<string, { text: string; cls: string }> = {
   temporary_error: { text: 'Temporary error', cls: 'warn' },
   test_draft: { text: 'Drafted test decision', cls: 'info' },
   ticket: { text: 'Ticket decision', cls: 'ok' },
+  risk_label: { text: 'Risk label marked wrong', cls: 'warn' },
 };
 
 export default function MemoryView({ hidden, link, onGoConnect }: Props) {

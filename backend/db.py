@@ -142,6 +142,9 @@ def ensure_columns() -> None:
     if "projects" in existing and "staging_url" not in {c["name"] for c in inspect(engine).get_columns("projects")}:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE projects ADD COLUMN staging_url VARCHAR(500)"))
+    if "qa_test_drafts" in existing and "memory_used" not in {c["name"] for c in inspect(engine).get_columns("qa_test_drafts")}:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE qa_test_drafts ADD COLUMN memory_used TEXT"))
     for table in ("spec_files", "collections"):
         if table not in existing:
             continue
