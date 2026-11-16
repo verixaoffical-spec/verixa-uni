@@ -1,12 +1,5 @@
 # Verixa: an agentic AI quality engineer
 
-> **This branch is `verixa-fyp1`: FYP I only (UC1 to UC7).** The four FYP II features (QA Memory, Suggest a Fix,
-> Regression Comparison and Risk Trends, UC8 to UC11) are not in this branch. They are added on top of it in the
-> branch `verixa-fyp2`. Where this file mentions them, it describes `verixa-fyp2`.
->
-> Tests on this branch: 505 Python tests pass; the browser suites give 157 passed and 1 skipped on purpose;
-> `tests/e2e/inputs.spec.ts` checks 54 inputs.
-
 Verixa sits between GitHub, Playwright, Newman and Jira. When a pull request is opened it rates how risky the
 change is. When the tester presses **Run Now** it runs the right tests on staging, collects proof for every
 failure and drafts a Jira ticket. **Nothing reaches Jira until the tester approves it.**

@@ -34,7 +34,10 @@ async def lifespan(app: FastAPI):
     init_db()        # the five tables this app owns
     init_agent_db()  # risk_assessments, owned by the Analysis Agent
     add_listener(live.hub.publish)  # agent steps are pushed to the dashboard over a WebSocket
+    from agents import analysis
+    from .memory import real_bugs_in_module
     from .qa_service import recover_runs
+    analysis.MEMORY_DEFECTS = real_bugs_in_module  # QA Memory feeds the module's bug history (Req 8.5)
     recover_runs()  # runs cut off by a restart are marked failed, not left running forever
     yield
 

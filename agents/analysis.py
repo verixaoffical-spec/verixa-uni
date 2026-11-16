@@ -66,6 +66,10 @@ def _as_data(text: str) -> str:
     return (text or "").replace(f"<{DATA_TAG}>", "").replace(f"</{DATA_TAG}>", "")
 
 
+# Set by the app at start up: (repo, module) -> real bugs QA Memory holds for that module. None in plain agent runs.
+MEMORY_DEFECTS = None
+
+
 def score_pr(pr_id: str, refresh: bool = False, token: str | None = None) -> dict:
     """Fetches the real PR from GitHub and computes the rule-based risk (see risk_rules.py).
 
@@ -105,6 +109,12 @@ def score_pr(pr_id: str, refresh: bool = False, token: str | None = None) -> dic
             except Exception as e:
                 notes.append(f"{label} lookup failed: {mask(str(e))[:60]}")
                 trace("github.defects_failed", pr_id, source=label, searched=arg, error=str(e)[:300])
+        # QA Memory (UC8): real bugs Verixa itself found in this module count as bug history too
+        remembered = MEMORY_DEFECTS(repo, module) if MEMORY_DEFECTS else 0
+        if remembered:
+            found.append(remembered)
+            notes.append(f"QA Memory: {remembered} real bug(s) found by Verixa runs")
+            trace("memory.defects_read", pr_id, module=module, found=remembered)
         defects = max(found, default=0)
 
     # A failed lookup is not evidence of a clean history. It is only "known" if at least one lookup answered.

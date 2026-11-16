@@ -6,6 +6,7 @@ uses, so the session cookie and the 401 contract ("the session is gone") are unc
 """
 import logging
 from importlib.util import find_spec
+from typing import Literal
 
 from cryptography.fernet import InvalidToken
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
@@ -20,11 +21,34 @@ from .api import MAX_INT, current_user, project_of
 from .auth import _check_origin
 from .db import User, get_db
 from .integrations import github_access_token
+from .memory import remember
+from .qa_db import ApprovalLog, MemoryEntry, log_decision
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/analysis")
 
 LABELS = ("High", "Medium", "Low")
+
+
+def _with_memory(db: Session, project, rows) -> list[dict]:
+    """Each assessment as JSON, plus the QA Memory entries about its module that were there when it was scored
+    (Req 8.6) and whether the tester marked its label wrong. If memory cannot be read the list is empty (Req 8.8)."""
+    try:
+        entries = db.scalars(select(MemoryEntry).where(MemoryEntry.project_id == project.id,
+                                                       MemoryEntry.kind.in_(("real_bug", "risk_label")))
+                             .order_by(MemoryEntry.id.desc()).limit(500)).all()
+        wrong = set(db.scalars(select(ApprovalLog.target_id).where(ApprovalLog.project_id == project.id,
+                                                                   ApprovalLog.action_type == "risk_label")))
+    except Exception:
+        log.warning("QA Memory could not be read for the risk list")
+        entries, wrong = [], set()
+    out = []
+    for row in rows:
+        used = [e for e in entries if row.state == "scored" and row.module and e.module == row.module
+                and e.created_at <= row.updated_at and not (e.kind == "risk_label" and e.pr_number == row.pr_number)][:5]
+        out.append({**to_json(row), "marked_wrong": row.id in wrong,
+                    "memory_used": [{"id": e.id, "kind": e.kind, "text": e.text[:200], "pr_number": e.pr_number} for e in used]})
+    return out
 
 
 @router.get("/pull-requests")
@@ -58,7 +82,7 @@ def pull_requests(limit: int = Query(50, ge=1, le=200),
     return {
         "project": {"repo": project.repo, "jira_key": project.jira_key,
                     "webhook_verified": bool(project.webhook_verified_at)},
-        "items": [to_json(row) for row in rows],
+        "items": _with_memory(db, project, rows),
         "counts": {
             **counts,
             "total": len(latest),
@@ -79,7 +103,36 @@ def one_assessment(assessment_id: int = Path(ge=1, le=MAX_INT), user: User = Dep
     row = db.get(RiskAssessment, assessment_id) if project else None
     if not row or not project or row.project_id != project.id:
         raise HTTPException(404, "No analysis with that id")
-    return to_json(row)
+    return _with_memory(db, project, [row])[0]
+
+
+class WrongLabelIn(BaseModel):
+    expected: Literal["Low", "Medium", "High"]
+
+
+@router.post("/pull-requests/{assessment_id}/wrong-label")
+def wrong_label(body: WrongLabelIn, request: Request, assessment_id: int = Path(ge=1, le=MAX_INT),
+                user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """The tester says this label is wrong (TBD13). It is saved to QA Memory (Req 8.1) and shown with later labels
+    of the same module. The label itself stays: it comes from the rules, never from a person or a model."""
+    _check_origin(request)
+    project = project_of(db, user)
+    row = db.get(RiskAssessment, assessment_id) if project else None
+    if not row or not project or row.project_id != project.id:
+        raise HTTPException(404, "No analysis with that id")
+    if row.state != "scored" or not row.risk_label:
+        raise HTTPException(409, "Only a scored pull request has a label to mark")
+    if body.expected == row.risk_label:
+        raise HTTPException(422, f"The label is already {row.risk_label}. Pick the label you expected")
+    if db.scalar(select(ApprovalLog.id).where(ApprovalLog.project_id == project.id, ApprovalLog.action_type == "risk_label",
+                                              ApprovalLog.target_id == row.id)):
+        raise HTTPException(409, "This label was already marked wrong")
+    log_decision(db, user.id, project.id, "risk_label", row.id, "wrong")
+    remember(db, project.id, row.repo, "risk_label",
+             f"Risk label {row.risk_label} was marked wrong. The tester expected {body.expected}: {row.title or 'untitled'}",
+             module=row.module, pr_number=row.pr_number, decision="wrong", user_id=user.id)
+    db.commit()
+    return _with_memory(db, project, [row])[0]
 
 
 class AnalyseIn(BaseModel):
@@ -121,4 +174,4 @@ async def analyse(body: AnalyseIn, request: Request, user: User = Depends(curren
     if not row:
         raise HTTPException(500, "The analysis produced no result")
     db.refresh(row)
-    return to_json(row)
+    return _with_memory(db, project, [row])[0]

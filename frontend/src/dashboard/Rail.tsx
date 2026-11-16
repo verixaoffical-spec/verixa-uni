@@ -3,7 +3,7 @@ import AccountMenu from './AccountMenu';
 import type { Account } from './api';
 import { icons } from './icons';
 
-export type View = 'connect' | 'library' | 'security' | 'risk' | 'profile' | 'runs' | 'tickets';
+export type View = 'connect' | 'library' | 'security' | 'risk' | 'profile' | 'runs' | 'tickets' | 'trends' | 'memory';
 
 interface Props {
   view: View;
@@ -30,8 +30,10 @@ export default function Rail({ view, onView, account, unsavedChanges, onSignedOu
         {item('risk', 'Risk Analysis', icons.pullRequests)}
         {item('runs', 'Test Runs and Evidence', icons.testRuns)}
         {item('tickets', 'Jira Tickets', icons.jiraSync)}
+        {item('trends', 'Risk Trends', icons.trends)}
         <span className="sep"></span>
         {item('library', 'Test Library', icons.library)}
+        {item('memory', 'QA Memory', icons.memory)}
         {item('connect', 'Integrations', icons.integrations)}
       </nav>
       <AccountMenu account={account} unsavedChanges={unsavedChanges} onIntegrations={() => onView('connect')}

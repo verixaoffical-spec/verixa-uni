@@ -195,7 +195,7 @@ test('wishlist lists saved items', async ({ page }) => {
 
 
 def script_test_agent() -> None:
-    """UC4 to UC7 in the browser: a real staging app, real Playwright and Newman, a scripted model and a scripted Jira."""
+    """UC4 to UC11 in the browser: a real staging app, real Playwright and Newman, a scripted model and a scripted Jira."""
     import threading
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -233,12 +233,16 @@ def script_test_agent() -> None:
         return {"likely_cause": f"The test {test} fails because {error.splitlines()[0][:120]}. The cart total or the orders "
                                 "endpoint returns the wrong value.", "steps": ["Open the shop", "Look at the cart total"], "model": "scripted"}
 
-    async def draft(module, code, name, feedback):
+    async def draft(module, code, name, feedback, memory=None):
         return {"code": "import { test, expect } from '@playwright/test';\n"
                         f"test('{module} page opens', async ({{ page }}) => {{ await page.goto('/'); await expect(page.locator('h1')).toBeVisible(); }});\n",
                 "model": "scripted"}
 
-    report.explain_failure, report.draft_test = explain, draft
+    async def fix(test, error, code, memory, feedback):
+        return {"diff": "--- a/src/payments/session.ts\n+++ b/src/payments/session.ts\n@@ -1 +1 @@\n-total = price * 2\n+total = price\n",
+                "explanation": "The total doubles the price. Using the price once makes the cart total test pass.", "model": "scripted"}
+
+    report.explain_failure, report.draft_test, report.suggest_fix = explain, draft, fix
     github_client.fetch_pr = lambda repo, number, token=None: ({}, [
         {"filename": "src/payments/session.ts", "additions": 1, "deletions": 1, "patch": "-total = price\n+total = price * 2"},
         {"filename": "src/wishlist/page.ts", "additions": 3, "deletions": 0, "patch": "+export const wishlist = []"}])

@@ -52,7 +52,7 @@ def remove_project(db: Session, user: User) -> None:
     # The agent's risk assessments point at this project, so they go with it. Without this, both
     # disconnecting and deleting an account would hit a foreign key error.
     db.execute(delete(RiskAssessment).where(RiskAssessment.project_id == project.id))
-    delete_project_data(db, project.id)  # runs, evidence rows, drafts and tickets
+    delete_project_data(db, project.id)  # runs, evidence rows, drafts, tickets and QA Memory
     db.delete(project)
 
 

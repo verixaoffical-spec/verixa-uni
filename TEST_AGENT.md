@@ -1,9 +1,5 @@
 # The Test Agent, in simple words
 
-> **This branch is `verixa-fyp1`: FYP I only (UC1 to UC7).** The four FYP II features (QA Memory, Suggest a Fix,
-> Regression Comparison and Risk Trends, UC8 to UC11) are not in this branch. They are added on top of it in the
-> branch `verixa-fyp2`. Where this file mentions them, it describes `verixa-fyp2`.
-
 This file explains one agent: the **Test Agent**. It covers what it does, the order it works in, how it drafts
 new tests, which rules it follows, what the Manager checks, its endpoints and how it uses its tools.
 
@@ -28,14 +24,15 @@ It never starts on its own (BR1), and it only ever touches the staging address (
 Tester presses Run Now                      POST /api/runs
   1. Checks before starting                 staging address saved and allowed, tools installed,
                                             Test Library not empty, no other run in progress
-  2. Pick the tests                         from the risk label and the changed modules
+  2. Pick the tests                         from the risk label, the changed modules and QA Memory
   3. Check staging                          a page that answers 404 = "deployment pending", not run
   4. Run Playwright and Newman together     in a locked down process, with a time limit
   5. Sort every result                      passed, real bug, temporary error, deployment pending, skipped
   6. Save results and proof                 screenshot, trace, console log, network log (secrets removed)
-  7. Hand real bugs to the Report Agent     one ticket draft per real bug (BR3)
-  8. Look for coverage gaps                 draft a test for each changed module without a test
-  9. Finish                                 status "finished", or "flagged" if an agent answer needs a person
+  7. Remember                               real bugs and temporary errors go to QA Memory
+  8. Hand real bugs to the Report Agent     one ticket draft per real bug (BR3)
+  9. Look for coverage gaps                 draft a test for each changed module without a test
+ 10. Finish                                 status "finished", or "flagged" if an agent answer needs a person
 ```
 
 The screen follows every step live over a WebSocket (`/api/live`).
@@ -49,6 +46,7 @@ The function is `select_tests` in `backend/qa_service.py`. No model is used here
 | The risk label is **High** | Every spec (the full regression set) |
 | No changed module is known | Every spec |
 | Medium or Low | Specs whose file name or test title mentions a changed module |
+| A spec failed in this module before | That spec is added too (this comes from QA Memory, Req 8.5) |
 | No spec mentions the changed modules | Every spec, to be safe |
 
 The Postman collection always runs when there is one. A test set to **Skip** or **To do** in the Test Library is
@@ -99,7 +97,7 @@ down:
 A failed test is tried **one more time** (BR5). If it still fails with a temporary error, it stays a temporary error
 and gets no ticket. Only real bugs go to the Report Agent.
 
-## 7. How it drafts test cases (step 8, UC5)
+## 7. How it drafts test cases (step 9, UC5)
 
 The function is `draft_gap_tests` in `backend/qa_service.py`.
 
@@ -107,13 +105,14 @@ The function is `draft_gap_tests` in `backend/qa_service.py`.
    collection mention this module? If nothing does, that module is a gap (`covered`).
 2. **Skip what is already waiting.** A module that already has a draft waiting for the tester gets no second one.
 3. **Limit.** At most 3 drafts per run, so one huge pull request cannot use up the model.
-4. **Ask the model.** It gets the module name, the changed code of that module (with secrets hidden). It is told to write one Playwright file in TypeScript with
+4. **Ask the model.** It gets the module name, the changed code of that module (with secrets hidden) and the real
+   bugs found in that module before (from QA Memory). It is told to write one Playwright file in TypeScript with
    1 to 3 tests.
 5. **The Manager checks the answer** (see the next section). A bad answer goes back with the reason, up to 3 times.
 6. **Save as Drafted.** The file is named `verixa-<module>.spec.ts`. It is **not used** yet (BR11).
 7. **The tester decides.** Approve: the library rules are checked once more, then the file is added to the Test
    Library and runs on the next Run Now. Reject: it is never used. Both decisions are saved with the time and the
-   tester.
+   tester, and go to QA Memory.
 
 If every changed module already has a test, nothing is drafted and the run goes on (Req 5.7).
 
@@ -153,6 +152,7 @@ All need a signed in account. A row of another account answers **404**.
 | GET | `/api/evidence/{id}` | One proof file (screenshot, trace or log) |
 | GET | `/api/drafts` | Drafted tests waiting for a decision |
 | POST | `/api/drafts/{id}/decision` | Approve or reject a drafted test |
+| GET | `/api/compare` | Compares two runs (UC10) |
 | WebSocket | `/api/live` | Live progress of a run |
 
 Common answers: **409** no staging address, empty Test Library or a run already in progress; **422** a bad

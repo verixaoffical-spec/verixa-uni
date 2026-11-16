@@ -20,11 +20,13 @@ from .agent_db import RiskAssessment
 from .api import MAX_INT, current_user, project_of
 from .auth import _check_origin
 from .db import Project, User, get_db
-from .qa_db import DraftTicket, Evidence, TestDraft, TestResult, TestRun, log_decision
+from .memory import entry_json
+from .qa_db import DraftTicket, Evidence, FixSuggestion, MemoryEntry, TestDraft, TestResult, TestRun, log_decision
 from .settings import settings
 
 router = APIRouter(prefix="/api")
 runs_by_user = Throttle(limit=settings.max_runs_per_hour, window=3600)
+fixes_by_user = Throttle(limit=30, window=3600)  # each suggestion costs model calls
 def Id():
     """A path id: positive and small enough for the database. A new object per route, so FastAPI names each one."""
     return Path(ge=1, le=MAX_INT)
@@ -45,7 +47,7 @@ def _owned(db: Session, model, row_id: int, project: Project):
         run = row
     elif isinstance(row, TestResult):
         run = db.get(TestRun, row.run_id)
-    elif isinstance(row, Evidence):
+    elif isinstance(row, (Evidence, FixSuggestion)):
         result = db.get(TestResult, row.result_id)
         run = result and db.get(TestRun, result.run_id)
     elif row is not None and getattr(row, "project_id", None) == project.id:
@@ -123,11 +125,13 @@ def one_run(run_id: int = Id(), user: User = Depends(current_user), db: Session 
     ids = [r.id for r in results]
     evidence = db.scalars(select(Evidence).where(Evidence.result_id.in_(ids))).all() if ids else []
     tickets = db.scalars(select(DraftTicket).where(DraftTicket.result_id.in_(ids))).all() if ids else []
+    fixes = db.scalars(select(FixSuggestion).where(FixSuggestion.result_id.in_(ids)).order_by(FixSuggestion.id)).all() if ids else []
     drafts = db.scalars(select(TestDraft).where(TestDraft.run_id == run.id)).all()
     return {
         "run": qa.run_json(db, run),
         "results": [qa.result_json(r, [e for e in evidence if e.result_id == r.id]) for r in results],
         "tickets": [qa.ticket_json(db, t) for t in tickets],
+        "fixes": [qa.fix_json(f) for f in fixes],
         "drafts": [qa.draft_json(d) for d in drafts],
     }
 
@@ -220,3 +224,84 @@ def reject_ticket(request: Request, ticket_id: int = Id(), user: User = Depends(
     _check_origin(request)
     project = _project(db, user)
     return qa.reject_ticket(db, user, project, _owned(db, DraftTicket, ticket_id, project))
+
+
+# ---------- Suggest a Fix (UC9) ----------
+
+@router.post("/results/{result_id}/fix")
+async def suggest_fix(request: Request, result_id: int = Id(), user: User = Depends(current_user), db: Session = Depends(get_db)):
+    _check_origin(request)
+    project = _project(db, user)
+    result = _owned(db, TestResult, result_id, project)
+    if result.outcome != "real_bug":
+        raise HTTPException(409, "A fix can only be suggested for a failure marked as a real bug")
+    _limit(fixes_by_user, user, "fix suggestions this hour")
+    fixes_by_user.fail(str(user.id))
+    return qa.fix_json(await qa.suggest_fix(result.id, user.id))
+
+
+@router.post("/fixes/{fix_id}/decision")
+def decide_fix(body: DecisionIn, request: Request, fix_id: int = Id(), user: User = Depends(current_user),
+               db: Session = Depends(get_db)):
+    _check_origin(request)
+    project = _project(db, user)
+    return qa.decide_fix(db, user, project, _owned(db, FixSuggestion, fix_id, project), body.approve)
+
+
+# ---------- Regression Comparison (UC10) ----------
+
+@router.get("/compare")
+def compare(a: int | None = Query(None, ge=1, le=MAX_INT), b: int | None = Query(None, ge=1, le=MAX_INT),
+            user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Compares run a (before) with run b (after). Without ids: the latest finished run and the one before it."""
+    project = _project(db, user)
+    done = db.scalars(select(TestRun).where(TestRun.project_id == project.id, TestRun.status.in_(("finished", "flagged")))
+                      .order_by(TestRun.id.desc())).all()
+    if len(done) < 2:
+        raise HTTPException(409, "Run the tests at least twice before comparing")
+    if a is None and b is None:
+        before, after = done[1], done[0]
+    elif a is None or b is None or a == b:
+        raise HTTPException(422, "Pick two different runs")
+    else:
+        before, after = _owned(db, TestRun, a, project), _owned(db, TestRun, b, project)
+        if before.status not in ("finished", "flagged") or after.status not in ("finished", "flagged"):
+            raise HTTPException(409, "Only finished runs can be compared")
+    return qa.compare(db, project, before, after)
+
+
+# ---------- Cross PR Risk Trends (UC11) ----------
+
+@router.get("/trends")
+def trends(days: int = Query(30), module: str | None = Query(None, max_length=200),
+           user: User = Depends(current_user), db: Session = Depends(get_db)):
+    if days not in (7, 30, 90, 365):
+        raise HTTPException(422, "Pick a period of 7, 30, 90 or 365 days")
+    project = project_of(db, user)
+    if not project:
+        raise HTTPException(409, "Connect a repository first")
+    return qa.trends(db, project, days, module or None)
+
+
+# ---------- QA Memory (UC8) ----------
+
+@router.get("/memory")
+def memory(kind: str | None = Query(None, max_length=20), user: User = Depends(current_user), db: Session = Depends(get_db)):
+    project = project_of(db, user)
+    if not project:
+        return {"items": []}
+    query = select(MemoryEntry).where(MemoryEntry.project_id == project.id)
+    if kind:
+        query = query.where(MemoryEntry.kind == kind)
+    return {"items": [entry_json(e) for e in db.scalars(query.order_by(MemoryEntry.id.desc()).limit(300))]}
+
+
+@router.post("/memory/{entry_id}/delete", status_code=204)
+def forget(request: Request, entry_id: int = Id(), user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """TBD15: a tester removes a wrong memory entry. It is no longer used by any agent."""
+    _check_origin(request)
+    project = _project(db, user)
+    entry = _owned(db, MemoryEntry, entry_id, project)
+    log_decision(db, user.id, project.id, "memory_delete", entry.id, "approved")
+    db.delete(entry)
+    db.commit()

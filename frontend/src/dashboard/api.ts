@@ -70,8 +70,11 @@ export interface Assessment {
   errors: string[];
   created_at: string | null;
   updated_at: string | null;
+  marked_wrong: boolean;            // the tester said this label is wrong (saved to QA Memory)
+  memory_used: MemoryUsed[];        // QA Memory entries about this module when it was scored (Req 8.6)
 }
 
+export interface MemoryUsed { id: number; text: string; pr_number: number | null }
 
 export interface RiskFeed {
   project: { repo: string; jira_key: string; webhook_verified: boolean } | null;
@@ -120,6 +123,8 @@ export const api = {
   // Scores a pull request now instead of waiting for GitHub. Runs the agent and answers when done,
   // so it can take as long as the model chain takes.
   analysePr: (prNumber: number) => request<Assessment>('/api/analysis/analyse', { pr_number: prNumber }),
+  // The label stays as the rules gave it. The tester's view is saved to QA Memory.
+  markWrong: (id: number, expected: RiskLabel) => request<Assessment>(`/api/analysis/pull-requests/${id}/wrong-label`, { expected }),
 
   // Two-step verification. Changing it asks for the password again, and turning it off also asks for a code.
   twoFactor: () => request<TwoFactorStatus>('/auth/2fa'),
@@ -201,7 +206,7 @@ export async function signOut(): Promise<boolean> {
 }
 
 
-// ---- Test runs, tickets and drafted tests (UC4 to UC7) ----
+// ---- Test runs, tickets, fixes, comparison, trends and QA Memory (UC4 to UC11) ----
 export type Outcome = 'passed' | 'real_bug' | 'temporary_error' | 'deployment_pending' | 'skipped';
 export type RunStatus = 'running' | 'finished' | 'flagged' | 'failed';
 
@@ -244,6 +249,7 @@ export interface Ticket {
   root_cause: string;
   priority: 'High' | 'Medium' | 'Low';
   assignee: string | null;
+  fix_text: string | null;
   status: 'Drafted' | 'Filed' | 'Rejected';
   flagged: boolean;
   jira_key: string | null;
@@ -252,10 +258,36 @@ export interface Ticket {
   model_used: string | null;
   created_at: string | null;
   filed_at: string | null;
+  memory_used: MemoryUsed[];
 }
 
-export interface Draft { id: number; run_id: number; module: string; file_name: string; code: string; status: 'Drafted' | 'Approved' | 'Rejected'; model_used: string | null; created_at: string | null }
-export interface RunDetail { run: Run; results: Result[]; tickets: Ticket[]; drafts: Draft[] }
+export interface Fix { id: number; result_id: number; diff: string; explanation: string; status: 'Suggested' | 'Added' | 'Discarded'; model_used: string | null }
+export interface Draft { id: number; run_id: number; module: string; file_name: string; code: string; status: 'Drafted' | 'Approved' | 'Rejected'; memory_used: MemoryUsed[]; model_used: string | null; created_at: string | null }
+export interface RunDetail { run: Run; results: Result[]; tickets: Ticket[]; fixes: Fix[]; drafts: Draft[] }
+
+export interface Comparison {
+  a: Run;
+  b: Run;
+  summary: Record<string, number>;
+  rows: { kind: string; file: string; title: string; tag: string; before: { id: number; outcome: Outcome } | null;
+          after: { id: number; outcome: Outcome } | null; ticket_id: number | null }[];
+}
+
+export interface Trends {
+  enough: boolean;
+  minimum: number;
+  days: number;
+  module: string | null;
+  total: number;
+  share: Record<RiskLabel, number>;
+  periods: ({ period: string } & Record<RiskLabel, number>)[];
+  modules: { module: string; failures: number; real_bugs: number }[];
+  all_modules: string[];
+  pull_requests: { pr_number: number; title: string | null; risk_label: RiskLabel; module: string | null; created_at: string;
+                   last_run: { passed: number; real_bug: number; status: RunStatus } | null; tickets: { key: string; url: string | null }[] }[];
+}
+
+export interface MemoryItem { id: number; kind: string; module: string | null; pr_number: number | null; text: string; decision: string | null; created_at: string | null }
 
 export const qa = {
   saveStaging: (url: string) => request<{ staging_url: string; reachable: boolean }>('/api/project/staging', { url }),
@@ -268,4 +300,11 @@ export const qa = {
   editTicket: (id: number, body: Pick<Ticket, 'title' | 'root_cause' | 'steps' | 'priority'>) => request<Ticket>(`/api/tickets/${id}`, body),
   fileTicket: (id: number) => request<Ticket>(`/api/tickets/${id}/file`, {}),
   rejectTicket: (id: number) => request<Ticket>(`/api/tickets/${id}/reject`, {}),
+  suggestFix: (resultId: number) => request<Fix>(`/api/results/${resultId}/fix`, {}),
+  decideFix: (id: number, approve: boolean) => request<Fix>(`/api/fixes/${id}/decision`, { approve }),
+  compare: (a?: number, b?: number) => request<Comparison>('/api/compare' + (a && b ? `?a=${a}&b=${b}` : '')),
+  trends: (days: number, module: string) =>
+    request<Trends>(`/api/trends?days=${days}${module ? '&module=' + encodeURIComponent(module) : ''}`),
+  memory: () => request<{ items: MemoryItem[] }>('/api/memory'),
+  forget: (id: number) => request<null>(`/api/memory/${id}/delete`, {}),
 };

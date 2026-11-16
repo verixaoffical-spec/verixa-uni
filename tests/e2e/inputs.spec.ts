@@ -1,5 +1,5 @@
 /**
- * 54 inputs across the whole app, against the real server (tests/e2e/server.py): first the correct inputs, then
+ * 68 inputs across the whole app, against the real server (tests/e2e/server.py): first the correct inputs, then
  * negative, edge and attack inputs. Each must get the right answer and change nothing it should not.
  * Writes test-results/inputs.md, a table of every input and what happened, for the project report.
  */
@@ -105,6 +105,7 @@ test('Test Library: unsafe and broken files are refused, good ones saved', async
 });
 
 let runId = 0;
+let bugResult = 0;
 let ticketId = 0;
 
 test('Run Now: only a real, scored pull request of this account runs', async () => {
@@ -120,6 +121,7 @@ test('Run Now: only a real, scored pull request of this account runs', async () 
   await check('Run Now', 'second run while one is running', run(scored.id), 409, 'already in progress');
   await expect.poll(async () => (await (await api.get(`/api/runs/${runId}`)).json()).run.status, { timeout: 300_000 }).not.toBe('running');
   const detail = await (await api.get(`/api/runs/${runId}`)).json();
+  bugResult = detail.results.find((r: any) => r.outcome === 'real_bug').id;
   ticketId = detail.tickets[0].id;
   record('Run Now', 'run finishes and sorts results', 'real bugs and pending found', `${detail.run.counts.real_bug} bugs, ${detail.run.counts.deployment_pending} pending`,
          detail.run.counts.real_bug > 0 && detail.run.counts.deployment_pending > 0);
@@ -134,9 +136,26 @@ test('ticket review: bad edits are refused, a script in the title stays text', a
   await check('Ticket', 'valid edit with <img src=x onerror=alert(1)> in the title', edit({ title: 'Cart <img src=x onerror=alert(1)> total' }), 200);
 });
 
-test('evidence and cross site: odd inputs', async () => {
+test('fix, trends, evidence and memory: odd inputs', async () => {
+  await check('Suggest a fix', 'a result id that is not a real bug or not yours (999999)', () => api.post('/api/results/999999/fix', json({})), 404);
+  await check('Suggest a fix', `valid: real bug #${bugResult}`, () => api.post(`/api/results/${bugResult}/fix`, json({})), 200, 'diff');
+  await check('Trends', 'days=5 (not a period on offer)', () => api.get('/api/trends?days=5'), 422);
+  await check('Trends', 'days=abc', () => api.get('/api/trends?days=abc'), 422);
+  await check('Trends', 'valid: days=30', () => api.get('/api/trends?days=30'), 200, 'share');
   await check('Evidence', 'id 0', () => api.get('/api/evidence/0'), 422);
   await check('Evidence', 'path trick ..%2F..%2F.env', () => api.get('/api/evidence/..%2F..%2F.env'), 404);
+  const memory = (await (await api.get('/api/memory')).json()).items;
+  await check('QA Memory', `remove entry #${memory[0].id}`, () => api.post(`/api/memory/${memory[0].id}/delete`, json({})), 204);
+  await check('QA Memory', 'remove the same entry again', () => api.post(`/api/memory/${memory[0].id}/delete`, json({})), 404);
+  const feed = await (await api.get('/api/analysis/pull-requests')).json();
+  const scored = feed.items.find((r: any) => r.state === 'scored' && r.risk_label === 'High');
+  const wrong = (id: number, expected: unknown) => () => api.post(`/api/analysis/pull-requests/${id}/wrong-label`, json({ expected }));
+  await check('Risk label', 'marked wrong, expected "Urgent" (not a label)', wrong(scored.id, 'Urgent'), 422);
+  await check('Risk label', 'marked wrong, expected High (the label it already has)', wrong(scored.id, 'High'), 422, 'already');
+  await check('Risk label', 'a row that does not exist (999999)', wrong(999999, 'Low'), 404);
+  await check('Risk label', 'valid: High marked wrong, expected Low', wrong(scored.id, 'Low'), 200, '"marked_wrong":true');
+  await check('Risk label', 'marked wrong a second time', wrong(scored.id, 'Low'), 409, 'already marked');
+  await check('QA Memory', 'the wrong label is now a memory entry', () => api.get('/api/memory?kind=risk_label'), 200, 'marked wrong');
   await check('Cross site', 'Run Now sent from another site (Origin: https://evil.example)',
               () => api.post('/api/runs', { data: { assessment_id: 1 }, headers: { 'content-type': 'application/json', origin: 'https://evil.example' } }), 403);
 });

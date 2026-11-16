@@ -6,6 +6,8 @@ import Rail, { type View } from './Rail';
 import RiskView from './RiskView';
 import RunsView from './RunsView';
 import TicketsView from './TicketsView';
+import TrendsView from './TrendsView';
+import MemoryView from './MemoryView';
 import ProfileView from './ProfileView';
 import SecurityView from './SecurityView';
 import type { HookState, Link } from './connection';
@@ -23,9 +25,9 @@ function leave(url: string) {
 const goLogin = (flag: string) => leave(`/login?${flag}&next=${encodeURIComponent(location.pathname)}${location.hash}`);
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-const VIEWS: View[] = ['connect', 'library', 'security', 'risk', 'profile', 'runs', 'tickets'];
+const VIEWS: View[] = ['connect', 'library', 'security', 'risk', 'profile', 'runs', 'tickets', 'trends', 'memory'];
 // Screens that need a connected project. Opened before connecting, they show their own "connect first" screen.
-const PROJECT_VIEWS: View[] = ['library', 'risk', 'runs', 'tickets'];
+const PROJECT_VIEWS: View[] = ['library', 'risk', 'runs', 'tickets', 'trends', 'memory'];
 const viewFromHash = (): View => {
   const wanted = location.hash.slice(1) as View;
   return VIEWS.includes(wanted) ? wanted : 'connect';
@@ -187,6 +189,8 @@ export default function App() {
         <RunsView hidden={view !== 'runs'} link={link} openRun={openRun} onGoConnect={() => show('connect')} />
         <TicketsView hidden={view !== 'tickets'} link={link} onGoConnect={() => show('connect')}
                      onOpenRun={id => { setOpenRun({ id }); show('runs'); }} />
+        <TrendsView hidden={view !== 'trends'} link={link} onGoConnect={() => show('connect')} onOpenRisk={() => show('risk')} />
+        <MemoryView hidden={view !== 'memory'} link={link} onGoConnect={() => show('connect')} />
         <ProfileView hidden={view !== 'profile'} account={account} onAccount={setAccount}
                      onDeleted={() => { loader.show('Signing you out'); leave('/login?deleted'); }}
                      onSignInAgain={() => signOut().then(() => goLogin('reauth'))} />
