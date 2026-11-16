@@ -1,9 +1,8 @@
-"""Tables for test runs, evidence, drafted tests, tickets, suggested fixes, approvals and QA Memory (UC4 to UC11).
+"""Tables for test runs, evidence, drafted tests, tickets and approvals (UC4 to UC7).
 
 They sit on the same Base as backend/db.py, so init_db() creates them and the tests drop and rebuild them together.
 Big proof files (screenshots, traces, logs) stay on the server disk: only their paths are stored here (Req 6.5).
 """
-import functools
 import json
 from datetime import datetime
 
@@ -73,7 +72,6 @@ class TestDraft(Base):
     file_name: Mapped[str] = mapped_column(String(255))
     code: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(10), default="Drafted")
-    memory_used: Mapped[str | None] = mapped_column(Text)      # JSON list of {id, text, pr_number} (Req 8.6)
     model_used: Mapped[str | None] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
@@ -89,10 +87,8 @@ class DraftTicket(Base):
     root_cause: Mapped[str] = mapped_column(Text)
     priority: Mapped[str] = mapped_column(String(10))
     assignee: Mapped[str | None] = mapped_column(String(100))
-    fix_text: Mapped[str | None] = mapped_column(Text)         # a suggested fix the tester added (UC9)
     status: Mapped[str] = mapped_column(String(10), default="Drafted")
     flagged: Mapped[bool] = mapped_column(Boolean, default=False)  # the Manager could not accept the agent's text
-    memory_used: Mapped[str | None] = mapped_column(Text)      # JSON list of memory entry ids
     model_used: Mapped[str | None] = mapped_column(String(120))
     jira_key: Mapped[str | None] = mapped_column(String(50))
     jira_url: Mapped[str | None] = mapped_column(String(500))
@@ -101,44 +97,16 @@ class DraftTicket(Base):
     filed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
-class FixSuggestion(Base):
-    """A code fix written as text for a real bug (UC9). Never applied to the repository."""
-    __tablename__ = "fix_suggestions"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    result_id: Mapped[int] = mapped_column(ForeignKey("qa_results.id"), index=True)
-    diff: Mapped[str] = mapped_column(Text)
-    explanation: Mapped[str] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(String(12), default="Suggested")  # Suggested, Added, Discarded
-    model_used: Mapped[str | None] = mapped_column(String(120))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-
-
 class ApprovalLog(Base):
-    """Every decision a tester makes: starting a run, a drafted test, a ticket, a fix, deleting memory."""
+    """Every decision a tester makes: starting a run, a drafted test or a ticket."""
     __tablename__ = "approval_log"
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
-    action_type: Mapped[str] = mapped_column(String(20))   # run_start, test_draft, ticket, fix, memory_delete, risk_label
+    action_type: Mapped[str] = mapped_column(String(20))   # run_start, test_draft, ticket
     target_id: Mapped[int]
     decision: Mapped[str] = mapped_column(String(20))
     decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
-
-
-class MemoryEntry(Base):
-    """One thing Verixa learned (UC8): a real bug, or a tester's decision. Secrets are removed before it is saved."""
-    __tablename__ = "memory_entries"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
-    repo: Mapped[str] = mapped_column(String(200), index=True)
-    module: Mapped[str | None] = mapped_column(String(200))
-    kind: Mapped[str] = mapped_column(String(20))           # real_bug, temporary_error, test_draft, ticket, risk_label
-    pr_number: Mapped[int | None]
-    text: Mapped[str] = mapped_column(Text)
-    decision: Mapped[str | None] = mapped_column(String(20))
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
-    embedding: Mapped[str] = mapped_column(Text)            # JSON list of floats; on PostgreSQL also embedding_vec
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
 def log_decision(db: Session, user_id: int, project_id: int, action: str, target: int, decision: str) -> None:
@@ -153,12 +121,10 @@ def delete_project_data(db: Session, project_id: int) -> None:
     result_ids = select(TestResult.id).where(TestResult.run_id.in_(run_ids))
     for statement in (
         delete(Evidence).where(Evidence.result_id.in_(result_ids)),
-        delete(FixSuggestion).where(FixSuggestion.result_id.in_(result_ids)),
         delete(DraftTicket).where(DraftTicket.project_id == project_id),
         delete(TestDraft).where(TestDraft.project_id == project_id),
         delete(TestResult).where(TestResult.run_id.in_(run_ids)),
         delete(TestRun).where(TestRun.project_id == project_id),
-        delete(MemoryEntry).where(MemoryEntry.project_id == project_id),
         delete(ApprovalLog).where(ApprovalLog.project_id == project_id),
     ):
         db.execute(statement)
@@ -169,35 +135,3 @@ def loads(raw: str | None, fallback=None):
         return json.loads(raw) if raw else fallback
     except ValueError:
         return fallback
-
-
-@functools.lru_cache(maxsize=1)
-def vector_ready() -> bool:
-    """True when the database is PostgreSQL with pgvector, so memory search runs inside the database (Req 8.3).
-    Asked once and remembered; add_vector_column clears it."""
-    from sqlalchemy import text
-    from .db import engine
-    if engine.dialect.name != "postgresql":
-        return False
-    with engine.connect() as conn:
-        return bool(conn.execute(text("SELECT 1 FROM information_schema.columns WHERE table_name = 'memory_entries' "
-                                      "AND column_name = 'embedding_vec'")).first())
-
-
-def add_vector_column() -> None:
-    """Adds memory_entries.embedding_vec on PostgreSQL when pgvector is installed. Elsewhere memory search
-    compares the JSON vectors in Python, which gives the same answer for a project's few hundred entries."""
-    from sqlalchemy import text
-    from .db import engine
-    from .settings import settings
-    vector_ready.cache_clear()
-    if engine.dialect.name != "postgresql":
-        return
-    try:
-        with engine.begin() as conn:
-            if conn.execute(text("SELECT 1 FROM pg_extension WHERE extname = 'vector'")).first():
-                conn.execute(text(f"ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS embedding_vec "
-                                  f"vector({int(settings.embedding_dim)})"))
-    except Exception as exc:  # memory still works, only slower
-        import logging
-        logging.warning("pgvector column not added: %s", exc)

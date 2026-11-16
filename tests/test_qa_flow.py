@@ -15,7 +15,7 @@ from backend import execution as ex
 from backend import qa_api
 from backend.agent_db import AgentBase, RiskAssessment, init_agent_db
 from backend.db import Project, SessionLocal, SpecFile, engine
-from backend.qa_db import ApprovalLog, DraftTicket, Evidence, MemoryEntry, TestDraft, TestResult, TestRun
+from backend.qa_db import ApprovalLog, DraftTicket, Evidence, TestDraft, TestResult, TestRun
 
 from .test_crud import CrudTestCase, count, row, spec
 
@@ -51,7 +51,7 @@ class QaTestCase(CrudTestCase):
         super().setUp()
         AgentBase.metadata.drop_all(engine)
         init_agent_db()
-        for t in (qa_api.runs_by_user, qa_api.fixes_by_user):
+        for t in (qa_api.runs_by_user,):
             t._fails.clear()
         self.evidence = Path(tempfile.mkdtemp())
         self.pw = pw_report(("cart total is right", "unexpected", "expect(received).toBe(expected)\nExpected: 20\nReceived: 30"),
@@ -67,7 +67,6 @@ class QaTestCase(CrudTestCase):
             "fetch_pr": mock.patch("agents.github_client.fetch_pr", return_value=({}, PATCHES)),
             "explain": mock.patch("agents.report.explain_failure", side_effect=self.fake_explain),
             "draft": mock.patch("agents.report.draft_test", side_effect=self.fake_draft),
-            "fix": mock.patch("agents.report.suggest_fix", side_effect=self.fake_fix),
             "github_token": mock.patch("backend.qa_service.github_access_token", return_value="gh"),
         }
         self.patchers = fakes
@@ -81,9 +80,6 @@ class QaTestCase(CrudTestCase):
 
     async def fake_draft(self, *args):
         return {**self.model["draft_test"], "model": "fake/draft"}
-
-    async def fake_fix(self, *args):
-        return {**self.model.get("fix", FIX), "model": "fake/fix"}
 
     # ---- helpers ----
 
@@ -132,8 +128,7 @@ class RunNowTests(QaTestCase):
         # Test Agent: cart is covered by cart.spec.ts, wishlist is not, so one draft
         [draft] = detail["drafts"]
         self.assertEqual((draft["module"], draft["file_name"], draft["status"]), ("wishlist", "verixa-wishlist.spec.ts", "Drafted"))
-        # QA Memory got the real bug, and the run start is in the approval log
-        self.assertEqual(count(MemoryEntry, kind="real_bug"), 1)
+        # The run start is in the approval log
         self.assertEqual(count(ApprovalLog, action_type="run_start"), 1)
 
     def test_refusals(self):
@@ -290,11 +285,9 @@ class EvidenceAndOwnershipTests(QaTestCase):
             self.assertEqual(other.get(path).status_code, 404, path)
         ticket = detail["tickets"][0]
         for path in (f"/api/tickets/{ticket['id']}/file", f"/api/tickets/{ticket['id']}/reject",
-                     f"/api/results/{bug['id']}/fix", f"/api/drafts/{detail['drafts'][0]['id']}/decision",
-                     f"/api/memory/{row(MemoryEntry).id}/delete"):
+                     f"/api/drafts/{detail['drafts'][0]['id']}/decision"):
             self.assertEqual(other.post(path, json={"approve": True}).status_code, 404, path)
         self.assertEqual(other.get("/api/tickets").json()["items"], [])
-        self.assertEqual(other.get("/api/memory").json()["items"], [])
 
     def test_missing_or_tampered_evidence(self):
         detail = self.start(self.ready())
@@ -312,7 +305,7 @@ class EvidenceAndOwnershipTests(QaTestCase):
         self.start(self.ready())
         self.assertTrue(any(self.evidence.rglob("*.txt")))
         self.assertEqual(self.client.post("/api/disconnect").status_code, 204)
-        for model in (TestRun, TestResult, Evidence, DraftTicket, TestDraft, MemoryEntry, ApprovalLog):
+        for model in (TestRun, TestResult, Evidence, DraftTicket, TestDraft, ApprovalLog):
             self.assertEqual(count(model), 0, model.__name__)
         self.assertFalse(any(self.evidence.rglob("*.txt")))
 
@@ -328,7 +321,6 @@ class DraftDecisionTests(QaTestCase):
         self.assertIsNotNone(row(SpecFile, name="verixa-wishlist.spec.ts"))
         self.assertEqual(self.client.post(url, json={"approve": False}).status_code, 409)
         self.assertEqual(count(ApprovalLog, action_type="test_draft"), 1)
-        self.assertEqual(count(MemoryEntry, kind="test_draft"), 1)
 
     def test_reject_never_touches_the_library(self):
         draft = self.start(self.ready())["drafts"][0]
@@ -414,100 +406,3 @@ class TicketTests(QaTestCase):
         self.assertEqual(self.client.post(url + "/reject").json()["status"], "Rejected")
         self.assertEqual(self.client.post(url, json=good).status_code, 409)
         self.assertEqual(self.client.post(url + "/file").status_code, 409)
-
-
-class FixTests(QaTestCase):
-    def bug(self):
-        detail = self.start(self.ready())
-        return next(r for r in detail["results"] if r["outcome"] == "real_bug"), detail
-
-    def test_a_fix_is_text_only_and_added_to_the_draft_on_request(self):
-        bug, detail = self.bug()
-        res = self.client.post(f"/api/results/{bug['id']}/fix")
-        self.assertEqual(res.status_code, 200, res.text)
-        fix = res.json()
-        self.assertEqual(fix["status"], "Suggested")
-        self.assertIsNone(row(DraftTicket).fix_text)
-        res = self.client.post(f"/api/fixes/{fix['id']}/decision", json={"approve": True})
-        self.assertEqual(res.json()["status"], "Added")
-        self.assertIn("return a\n", row(DraftTicket).fix_text)
-        self.assertEqual(self.client.post(f"/api/fixes/{fix['id']}/decision", json={"approve": False}).status_code, 409)
-
-    def test_only_real_bugs_and_only_usable_fixes(self):
-        bug, detail = self.bug()
-        passed = next(r for r in detail["results"] if r["outcome"] == "passed")
-        self.assertEqual(self.client.post(f"/api/results/{passed['id']}/fix").status_code, 409)
-        self.model["fix"] = {"diff": "change it", "explanation": "x"}
-        res = self.client.post(f"/api/results/{bug['id']}/fix")
-        self.assertEqual(res.status_code, 502)
-        self.assertIn("ticket draft is not affected", res.json()["detail"])
-        self.assertEqual(row(DraftTicket).status, "Drafted")
-        self.fake["fetch_pr"].side_effect = RuntimeError("GitHub down")
-        self.assertEqual(self.client.post(f"/api/results/{bug['id']}/fix").status_code, 502)
-
-
-class CompareAndTrendTests(QaTestCase):
-    def test_compare_tags_every_test_and_changes_nothing(self):
-        aid = self.ready()
-        self.assertEqual(self.client.get("/api/compare").status_code, 409)  # one run is not enough
-        first = self.start(aid)["run"]["id"]
-        self.pw = pw_report(("cart total is right", "expected", None), ("cart opens", "unexpected", "boom"),
-                            ("new one", "expected", None))
-        second = self.start(aid)["run"]["id"]
-        before = [(r.id, r.outcome) for r in SessionLocal().scalars(select(TestResult))]
-        res = self.client.get("/api/compare").json()
-        tags = {r["title"]: r["tag"] for r in res["rows"]}
-        self.assertEqual(tags, {"cart total is right": "fixed", "cart opens": "new failure", "new one": "new test",
-                                "health": "still passing"})
-        self.assertEqual((res["a"]["id"], res["b"]["id"]), (first, second))
-        self.assertEqual(before, [(r.id, r.outcome) for r in SessionLocal().scalars(select(TestResult))])
-        for query, status in (("?a=1", 422), (f"?a={first}&b={first}", 422), (f"?a={first}&b=99999", 404), ("?a=x&b=2", 422)):
-            self.assertEqual(self.client.get("/api/compare" + query).status_code, status, query)
-
-    def test_trends_count_only_the_newest_score(self):
-        self.ready(label="Low")
-        with SessionLocal() as db:
-            pid = db.scalar(select(Project.id))
-            for n, label in ((7, "High"), (8, "Medium"), (9, "High")):  # PR 7 scored again: High replaces Low
-                db.add(RiskAssessment(project_id=pid, repo="ada/shop", pr_number=n, head_sha=str(n) * 40, state="scored",
-                                      risk_label=label, module="cart", modules_touched='["cart"]'))
-            db.commit()
-        res = self.client.get("/api/trends?days=30").json()
-        self.assertEqual((res["total"], res["share"], res["enough"]), (3, {"Low": 0, "Medium": 1, "High": 2}, True))
-        self.assertEqual(self.client.get("/api/trends?days=30&module=nothing").json()["total"], 0)
-        for bad in ("?days=5", "?days=abc", "?module=" + "x" * 201):
-            self.assertEqual(self.client.get("/api/trends" + bad).status_code, 422, bad)
-
-    def test_too_little_data_says_so(self):
-        self.ready()
-        res = self.client.get("/api/trends").json()
-        self.assertFalse(res["enough"])
-
-
-class MemoryTests(QaTestCase):
-    def test_memory_lists_finds_and_forgets(self):
-        self.start(self.ready())
-        items = self.client.get("/api/memory").json()["items"]
-        self.assertEqual([i["kind"] for i in items], ["real_bug"])
-        self.assertIn("Received: 30", items[0]["text"])
-        # QA Memory feeds the module's bug history in the Analysis Agent
-        from backend.memory import real_bugs_in_module
-        self.assertEqual(real_bugs_in_module("ada/shop", "cart"), 1)
-        self.assertEqual(self.client.post(f"/api/memory/{items[0]['id']}/delete").status_code, 204)
-        self.assertEqual(self.client.get("/api/memory").json()["items"], [])
-        self.assertEqual(self.client.post(f"/api/memory/{items[0]['id']}/delete").status_code, 404)
-        self.assertEqual(count(ApprovalLog, action_type="memory_delete"), 1)
-
-    def test_secrets_never_reach_memory(self):
-        self.pw = pw_report(("login works", "unexpected", "Expected token ghp_" + "z" * 36 + " password='hunter2pass'"))
-        self.start(self.ready())
-        text = row(MemoryEntry).text
-        self.assertNotIn("ghp_zzz", text)
-        self.assertNotIn("hunter2pass", text)
-        self.assertNotIn("ghp_zzz", row(TestResult, outcome="real_bug").error_message)
-
-    def test_a_broken_memory_never_stops_a_run(self):
-        with mock.patch("backend.memory.embed", side_effect=RuntimeError("memory down")):
-            run = self.start(self.ready())["run"]
-        self.assertEqual(run["status"], "finished")
-        self.assertEqual(count(MemoryEntry), 0)

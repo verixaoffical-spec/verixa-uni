@@ -1,5 +1,9 @@
 # Test data: try to break Verixa yourself
 
+> **This branch is `verixa-fyp1`: FYP I only (UC1 to UC7).** The four FYP II features (QA Memory, Suggest a Fix,
+> Regression Comparison and Risk Trends, UC8 to UC11) are not in this branch. They are added on top of it in the
+> branch `verixa-fyp2`. Where this file mentions them, it describes `verixa-fyp2`.
+
 ## 1. Start a private copy
 
 Run these in PowerShell from the project folder. They use a throwaway SQLite file and fake secrets, so your real

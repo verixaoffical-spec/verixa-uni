@@ -142,9 +142,6 @@ def ensure_columns() -> None:
     if "projects" in existing and "staging_url" not in {c["name"] for c in inspect(engine).get_columns("projects")}:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE projects ADD COLUMN staging_url VARCHAR(500)"))
-    if "qa_test_drafts" in existing and "memory_used" not in {c["name"] for c in inspect(engine).get_columns("qa_test_drafts")}:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE qa_test_drafts ADD COLUMN memory_used TEXT"))
     for table in ("spec_files", "collections"):
         if table not in existing:
             continue
@@ -160,10 +157,9 @@ def init_db() -> None:
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         except Exception as exc:
             logging.warning("Could not enable pgvector: %s", exc)
-    from . import qa_db  # noqa: F401  registers the test run and QA Memory tables on Base
+    from . import qa_db  # noqa: F401  registers the test run tables on Base
     Base.metadata.create_all(engine)
     ensure_columns()
-    qa_db.add_vector_column()
 
 
 def get_db():

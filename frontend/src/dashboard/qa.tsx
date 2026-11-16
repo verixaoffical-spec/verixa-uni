@@ -1,6 +1,6 @@
-/* Shared pieces of the Test Runs, Tickets, Trends and QA Memory screens (UC4 to UC11). */
+/* Shared pieces of the Test Runs and Tickets screens (UC4 to UC7). */
 import { useEffect, useState, type ReactNode } from 'react';
-import { ApiError, qa, type Draft, type Fix, type MemoryUsed, type Outcome, type Result, type RunStatus, type Ticket } from './api';
+import { ApiError, qa, type Draft, type Outcome, type Result, type RunStatus, type Ticket } from './api';
 import { icons } from './icons';
 import { useToast } from './Toast';
 
@@ -173,8 +173,6 @@ export function TicketEditor({ ticket, onChange }: { ticket: Ticket; onChange: (
         </label>
         <div className="field">Suggested assignee<div className="qvalue">{ticket.assignee || 'none'}</div></div>
       </div>
-      {ticket.fix_text && <details className="qlog"><summary>Suggested fix in this ticket</summary><pre>{ticket.fix_text}</pre></details>}
-      <MemoryUsedList items={ticket.memory_used} />
       {open && (
         <div className="qactions">
           {problem && <span className="qmuted">{problem}</span>}
@@ -188,75 +186,7 @@ export function TicketEditor({ ticket, onChange }: { ticket: Ticket; onChange: (
   );
 }
 
-// ---------- Suggest a Fix (UC9) ----------
-
-export function FixPanel({ result, fixes, ticketOpen, onFix }: { result: Result; fixes: Fix[]; ticketOpen: boolean; onFix: (f: Fix) => void }) {
-  const toast = useToast();
-  const [busy, setBusy] = useState(false);
-  const latest = fixes[fixes.length - 1];
-
-  async function suggest() {
-    setBusy(true);
-    try {
-      onFix(await qa.suggestFix(result.id));
-    } catch (err) {
-      toast(message(err, 'No fix could be suggested'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function decide(approve: boolean) {
-    setBusy(true);
-    try {
-      onFix(await qa.decideFix(latest.id, approve));
-      toast(approve ? 'Added to the ticket draft' : 'Suggestion discarded');
-    } catch (err) {
-      toast(message(err, 'The decision could not be saved'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="qfix">
-      <header>
-        <b>Suggested fix</b>
-        <span className="qmuted">Text only. Verixa never changes your repository.</span>
-        <button className="btn ghost sm" disabled={busy} onClick={suggest}>
-          {busy && (!latest || latest.status !== 'Suggested') ? 'Thinking…' : latest ? 'Suggest another' : 'Suggest a fix'}
-        </button>
-      </header>
-      {latest && (
-        <>
-          <p>{latest.explanation}</p>
-          <pre className="qdiff">{latest.diff.split('\n').map((line, i) => (
-            <span key={i} className={line.startsWith('+') && !line.startsWith('+++') ? 'add' : line.startsWith('-') && !line.startsWith('---') ? 'del' : ''}>{line}{'\n'}</span>
-          ))}</pre>
-          {latest.status === 'Suggested' ? (
-            <div className="qactions">
-              <button className="btn ghost sm" disabled={busy} onClick={() => decide(false)}>Discard</button>
-              <button className="btn sm" disabled={busy || !ticketOpen} onClick={() => decide(true)}
-                      title={ticketOpen ? '' : 'There is no open ticket draft for this failure'}>Add to ticket draft</button>
-            </div>
-          ) : <Tag cls={latest.status === 'Added' ? 'ok' : 'muted'}>{latest.status}</Tag>}
-        </>
-      )}
-    </div>
-  );
-}
-
 // ---------- a drafted test for a coverage gap (UC5) ----------
-
-/** Which QA Memory entries an agent used, so the tester can judge its result (Req 8.6). */
-export function MemoryUsedList({ items }: { items: MemoryUsed[] }) {
-  if (!items.length) return null;
-  return (
-    <details className="qlog"><summary>QA Memory used ({items.length})</summary>
-      <ul className="qmem">{items.map(m => <li key={m.id}>{m.pr_number ? `PR #${m.pr_number}: ` : ''}{m.text}</li>)}</ul>
-    </details>
-  );
-}
 
 export function DraftCard({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => void }) {
   const toast = useToast();
@@ -281,7 +211,6 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: (d: Dra
         <Tag cls={draft.status === 'Approved' ? 'ok' : draft.status === 'Rejected' ? 'muted' : 'info'}>{draft.status}</Tag>
       </header>
       <pre>{draft.code}</pre>
-      <MemoryUsedList items={draft.memory_used} />
       {draft.status === 'Drafted' && (
         <div className="qactions">
           <button className="btn ghost sm" disabled={busy} onClick={() => decide(false)}>Reject</button>

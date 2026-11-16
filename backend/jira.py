@@ -38,8 +38,6 @@ def describe(ticket, test_title: str, error: str, pr: str, risk: str | None) -> 
         ("heading", "Steps to reproduce"), ("paragraph", steps),
         ("heading", "Error"), ("code", error[:5000]),
         ("heading", "Suggested assignee"), ("paragraph", ticket.assignee or "not suggested"),
-        ("heading", "Suggested fix (text only, not applied)") if ticket.fix_text else ("paragraph", ""),
-        ("code", ticket.fix_text or ""),
         ("paragraph", "Secrets such as keys, tokens and passwords were removed from this text and the attached logs. "
                       "The browser trace is kept in Verixa and not attached, because it records everything the browser sent."),
     ])

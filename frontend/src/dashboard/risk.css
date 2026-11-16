@@ -66,7 +66,6 @@
   .rareas li span{flex-shrink:0;width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font:600 10px 'JetBrains Mono',monospace;
     background:hsl(var(--accent)/.18);color:#B7AEF5;}
   .rmeta{display:flex;flex-wrap:wrap;gap:8px;}
-  .rwrong{font:inherit;font-size:12px;padding:4px 8px;border:1px solid var(--hair);border-radius:999px;background-color:transparent;color:inherit;width:auto;margin:0;padding:4px 30px 4px 10px;}
   .rerr{padding:10px 13px;border-radius:10px;font-size:13px;line-height:1.55;background:rgba(196,61,61,.1);border:1px solid rgba(235,118,118,.28);color:#f0b9b9;}
   .rerr b{display:block;color:var(--bad);margin-bottom:3px;}
 

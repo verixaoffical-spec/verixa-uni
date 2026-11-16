@@ -1,8 +1,8 @@
-"""Runs, tickets, drafted tests, fixes, comparisons and trends (UC4 to UC11). The routes in qa_api.py call these.
+"""Runs, tickets and drafted tests (UC4 to UC7). The routes in qa_api.py call these.
 
 One run, start to end (Figure 2 of the SRS):
   Run Now -> pick tests -> check staging -> Playwright and Newman together -> sort every result -> save the proof
-  -> remember real bugs (QA Memory) -> Report Agent drafts a ticket for each real bug -> Test Agent drafts tests for
+  -> Report Agent drafts a ticket for each real bug -> Test Agent drafts tests for
   changed modules no test covers. The Manager checks each agent's work and retries up to AGENT_MAX_ATTEMPTS.
 Nothing reaches Jira here: a ticket is filed only by file_ticket, after the tester approves it.
 """
@@ -28,9 +28,8 @@ from .agent_db import RiskAssessment
 from .db import Collection, Project, SessionLocal, SpecFile, User, now
 from .integrations import github_access_token
 from .jira import describe, file_issue
-from .memory import for_module, remember, similar
 from .qa_db import (
-    DraftTicket, Evidence, FixSuggestion, MemoryEntry, TestDraft, TestResult, TestRun, loads, log_decision,
+    DraftTicket, Evidence, TestDraft, TestResult, TestRun, loads, log_decision,
 )
 from .settings import settings
 from .validators import validate_spec
@@ -50,7 +49,7 @@ def step(run: TestRun, text: str, level: str = "info", done: bool = False, first
 
 # ---------- choosing tests (Req 4.2) ----------
 
-def select_tests(specs: dict[str, str], label: str | None, modules: list[str], failed_before: set[str]) -> tuple[list[str], str]:
+def select_tests(specs: dict[str, str], label: str | None, modules: list[str]) -> tuple[list[str], str]:
     """Which specs fit this pull request, and why. High risk runs everything (the full regression set)."""
     everything = sorted(specs)
     words = {m.lower() for m in modules if m and m != "root" and len(m) >= 3}
@@ -60,13 +59,9 @@ def select_tests(specs: dict[str, str], label: str | None, modules: list[str], f
         return everything, "No changed module is known, so every spec runs"
     chosen = {name for name, text in specs.items()
               if any(w in name.lower() or any(w in t.lower() for t in ex.spec_titles(text)) for w in words)}
-    again = {name for name in failed_before if name in specs} - chosen
-    if not chosen and not again:
+    if not chosen:
         return everything, f"No spec mentions {', '.join(sorted(words))}, so every spec runs to be safe"
-    reason = f"Specs about {', '.join(sorted(words))}"
-    if again:
-        reason += f", plus {len(again)} that failed in this module before (QA Memory)"
-    return sorted(chosen | again), reason
+    return sorted(chosen), f"Specs about {', '.join(sorted(words))}"
 
 
 def covered(module: str, specs: dict[str, str], collection_text: str | None) -> bool:
@@ -143,13 +138,10 @@ async def execute_run(run_id: int) -> None:
         col = db.scalar(select(Collection).where(Collection.project_id == run.project_id))
         collection = (col.name, col.content) if col else None
         info = loads(run.selection, {})
-        remembered = {m.text.split("\n", 1)[0].removeprefix("spec: ") for m in db.scalars(
-            select(MemoryEntry).where(MemoryEntry.project_id == run.project_id, MemoryEntry.kind == "real_bug",
-                                      MemoryEntry.module == run.module))} if run.module else set()
     gave_up = False
     try:
         step(run, f"Test Agent started for PR #{run.pr_number}", first=True)
-        chosen, reason = select_tests(specs, run.risk_label, info.get("modules") or [], remembered)
+        chosen, reason = select_tests(specs, run.risk_label, info.get("modules") or [])
         _update(run_id, step="Checking staging", selection=json.dumps({**info, "specs": chosen, "reason": reason,
                                                                        "collection": collection[0] if collection else None}))
         step(run, f"Test Agent picked {len(chosen)} spec(s){' and the Postman collection' if collection else ''}: {reason}")
@@ -244,7 +236,7 @@ def _update(run_id: int, **fields) -> None:
 
 
 def _save_results(run_id: int, folder, results: list[dict]) -> list[int]:
-    """Stores every result, the proof of each failure, and real bugs and temporary errors in QA Memory."""
+    """Stores every result, and the proof of each failure."""
     ids = []
     with SessionLocal() as db:
         run = db.get(TestRun, run_id)
@@ -258,8 +250,6 @@ def _save_results(run_id: int, folder, results: list[dict]) -> list[int]:
             if r["outcome"] in FAILED:
                 for kind, path in ex.save_evidence(run_id, row.id, folder, r):
                     db.add(Evidence(result_id=row.id, evidence_type=kind, file_path=path, secrets_redacted=kind.endswith("_log")))
-                remember(db, run.project_id, run.repo, r["outcome"], f"spec: {r['file']}\n{r['title']}\n{r.get('error') or ''}",
-                         module=run.module, pr_number=run.pr_number)
         db.commit()
     return ids
 
@@ -285,16 +275,13 @@ async def draft_ticket(result_id: int, files: list[dict], explain: bool = True) 
         for e in evidence:
             path = ex.evidence_file(e.file_path)
             logs += (path.read_text(encoding="utf-8", errors="replace")[:1500] + "\n") if path else ""
-        past = similar(db, run.project_id, f"{result.title}\n{result.error_message}")
-        past = [m for m in past if not (m["pr_number"] == run.pr_number and m["text"].endswith(result.error_message or ""))]
         author = loads(run.selection, {}).get("author")
         title, error = result.title, result.error_message or ""
 
     answer, problems = None, ["not explained, the per run limit was reached"]
     if explain:
         answer, _, problems = await supervise(
-            "report", lambda fb: report.explain_failure(title, error, logs, _code_for(files, run.module),
-                                                        [m["text"] for m in past], fb),
+            "report", lambda fb: report.explain_failure(title, error, logs, _code_for(files, run.module), fb),
             lambda a: report.check_explanation(a, title, error), f"{run.repo}#{run.pr_number}")
     first_line = (error.strip().splitlines() or ["see the attached logs"])[0][:200]
     steps = (answer or {}).get("steps") or [f"Open the staging app at {run.staging_url}",
@@ -308,7 +295,7 @@ async def draft_ticket(result_id: int, files: list[dict], explain: bool = True) 
                        "The Report Agent could not explain this failure, so read the error and logs before filing. "
                        f"Reason: {'; '.join(problems)[:300]}",
             priority=PRIORITY.get(run.risk_label or "", "Medium"), assignee=author,
-            flagged=answer is None, memory_used=json.dumps([m["id"] for m in past]),
+            flagged=answer is None,
             model_used=(answer or {}).get("model")))
         db.commit()
     return answer is not None or not explain
@@ -341,10 +328,8 @@ async def draft_gap_tests(run_id: int, specs: dict[str, str], collection_text: s
         name = _draft_name(module, taken)
         taken.add(name.lower())
         step(run, f"Test Agent is drafting {name}: no test covers {module}")
-        with SessionLocal() as db:
-            past = for_module(db, run.project_id, module)  # real bugs found in this module before (Req 8.6)
         answer, _, problems = await supervise(
-            "test_draft", lambda fb: report.draft_test(module, code or f"(changes in {module})", name, fb, [m["text"] for m in past]),
+            "test_draft", lambda fb: report.draft_test(module, code or f"(changes in {module})", name, fb),
             lambda a: report.check_draft(a, module, validate_spec), f"{run.repo}#{run.pr_number}")
         if answer is None:
             ok = False
@@ -352,7 +337,7 @@ async def draft_gap_tests(run_id: int, specs: dict[str, str], collection_text: s
             continue
         with SessionLocal() as db:
             db.add(TestDraft(project_id=run.project_id, run_id=run_id, module=module[:200], file_name=name,
-                             code=answer["code"], model_used=answer.get("model"), memory_used=json.dumps(past)))
+                             code=answer["code"], model_used=answer.get("model")))
             db.commit()
         step(run, f"Drafted {name}. It waits for your approval", "ok")
     return ok
@@ -371,8 +356,6 @@ def decide_draft(db: Session, user: User, project: Project, draft: TestDraft, ap
                         size=len(draft.code.encode("utf-8")), test_count=len(result["tests"])))
     draft.status = "Approved" if approve else "Rejected"
     log_decision(db, user.id, project.id, "test_draft", draft.id, draft.status.lower())
-    remember(db, project.id, project.repo, "test_draft", f"drafted test {draft.file_name} for {draft.module}",
-             module=draft.module, decision=draft.status.lower(), user_id=user.id)
     db.commit()
     return draft_json(draft)
 
@@ -400,8 +383,6 @@ def file_ticket(db: Session, user: User, project: Project, ticket: DraftTicket) 
     ticket.status, ticket.jira_key, ticket.jira_url, ticket.filed_at = "Filed", key, url, now()
     ticket.error = "; ".join(problems) or None
     log_decision(db, user.id, project.id, "ticket", ticket.id, "approved")
-    remember(db, project.id, project.repo, "ticket", f"filed {key}: {ticket.title}\n{ticket.root_cause}",
-             module=run.module, pr_number=run.pr_number, decision="approved", user_id=user.id)
     db.commit()
     return ticket_json(db, ticket)
 
@@ -411,140 +392,8 @@ def reject_ticket(db: Session, user: User, project: Project, ticket: DraftTicket
         raise HTTPException(409, f"This ticket was already {ticket.status.lower()}")
     ticket.status = "Rejected"
     log_decision(db, user.id, project.id, "ticket", ticket.id, "rejected")
-    run = db.get(TestRun, db.get(TestResult, ticket.result_id).run_id)
-    remember(db, project.id, project.repo, "ticket", f"not filed: {ticket.title}", module=run.module,
-             pr_number=run.pr_number, decision="rejected", user_id=user.id)
     db.commit()
     return ticket_json(db, ticket)
-
-
-# ---------- Suggest a Fix (UC9) ----------
-
-async def suggest_fix(result_id: int, user_id: int) -> FixSuggestion:
-    with SessionLocal() as db:
-        result = db.get(TestResult, result_id)
-        run = db.get(TestRun, result.run_id)
-        past = [m["text"] for m in similar(db, run.project_id, f"{result.title}\n{result.error_message}")]
-    files = await asyncio.to_thread(_changed_code, user_id, run.repo, run.pr_number)
-    if not files:
-        raise HTTPException(502, "The changed code could not be read from GitHub, so no fix can be suggested")
-    names = [f["file"] for f in files]
-    answer, _, problems = await supervise(
-        "fix", lambda fb: report.suggest_fix(result.title, result.error_message or "", _code_for(files, run.module), past, fb),
-        lambda a: report.check_fix(a, names), f"{run.repo}#{run.pr_number}")
-    if answer is None:  # Req 9.9: the ticket draft goes on without a fix
-        raise HTTPException(502, "No usable fix could be produced. The ticket draft is not affected. " + "; ".join(problems)[:300])
-    with SessionLocal() as db:
-        fix = FixSuggestion(result_id=result_id, diff=answer["diff"], explanation=answer["explanation"], model_used=answer.get("model"))
-        db.add(fix)
-        db.commit()
-        db.refresh(fix)
-        return fix
-
-
-def decide_fix(db: Session, user: User, project: Project, fix: FixSuggestion, add: bool) -> dict:
-    if fix.status != "Suggested":
-        raise HTTPException(409, f"This suggestion was already {fix.status.lower()}")
-    if add:
-        ticket = db.scalar(select(DraftTicket).where(DraftTicket.result_id == fix.result_id))
-        if not ticket or ticket.status != "Drafted":
-            raise HTTPException(409, "There is no open ticket draft for this failure to add the fix to")
-        ticket.fix_text = f"{fix.explanation}\n\n{fix.diff}"
-    fix.status = "Added" if add else "Discarded"
-    log_decision(db, user.id, project.id, "fix", fix.id, "approved" if add else "rejected")
-    db.commit()
-    return fix_json(fix)
-
-
-# ---------- Regression Comparison (UC10) ----------
-
-def compare(db: Session, project: Project, a: TestRun, b: TestRun) -> dict:
-    """Tags every test of two runs. Reads only: no stored result changes (Req 10.9)."""
-    def outcomes(run):
-        return {(r.kind, r.file, r.title): r for r in db.scalars(select(TestResult).where(TestResult.run_id == run.id))}
-    before, after = outcomes(a), outcomes(b)
-    tickets = {t.result_id: t for t in db.scalars(select(DraftTicket).where(DraftTicket.result_id.in_([r.id for r in after.values()])))}
-    rows = []
-    for key in sorted(set(before) | set(after)):
-        old, new = before.get(key), after.get(key)
-        if not new:
-            tag = "removed test"
-        elif not old:
-            tag = "new test"
-        elif new.outcome == "deployment_pending":
-            tag = "pending"
-        elif new.outcome == "skipped":
-            tag = "skipped"
-        else:
-            was, now_failing = old.outcome in FAILED, new.outcome in FAILED
-            tag = ("still failing" if was else "new failure") if now_failing else ("fixed" if was else "still passing")
-        ticket = tickets.get(new.id) if new else None
-        rows.append({"kind": key[0], "file": key[1], "title": key[2], "tag": tag,
-                     "before": old and {"id": old.id, "outcome": old.outcome},
-                     "after": new and {"id": new.id, "outcome": new.outcome},
-                     "ticket_id": ticket.id if ticket else None})
-    summary = {}
-    for row in rows:
-        summary[row["tag"]] = summary.get(row["tag"], 0) + 1
-    return {"a": run_json(db, a), "b": run_json(db, b), "rows": rows, "summary": summary}
-
-
-# ---------- Cross PR Risk Trends (UC11) ----------
-
-def trends(db: Session, project: Project, days: int, module: str | None) -> dict:
-    since = now() - timedelta(days=days)
-    rows = db.scalars(select(RiskAssessment).where(
-        RiskAssessment.project_id == project.id, RiskAssessment.repo == project.repo, RiskAssessment.risk_label.is_not(None),
-        RiskAssessment.created_at >= since).order_by(RiskAssessment.created_at.desc(), RiskAssessment.id.desc())).all()
-    latest = {}
-    for row in rows:  # BR18: only the newest score of each pull request counts
-        latest.setdefault(row.pr_number, row)
-    prs = [r for r in latest.values() if not module or module in (loads(r.modules_touched, []) or [r.module])]
-    bucket_days = 1 if days <= 14 else 7
-    buckets: dict[str, dict] = {}
-    for r in prs:
-        at = r.created_at.date()
-        start = at - timedelta(days=(at - since.date()).days % bucket_days)
-        b = buckets.setdefault(start.isoformat(), {"period": start.isoformat(), "Low": 0, "Medium": 0, "High": 0})
-        b[r.risk_label] += 1
-
-    runs = db.scalars(select(TestRun).where(TestRun.project_id == project.id, TestRun.started_at >= since)).all()
-    newest_run: dict[int, TestRun] = {}
-    for run in sorted(runs, key=lambda r: r.id):
-        newest_run[run.pr_number] = run
-    modules: dict[str, dict] = {}
-    results = db.scalars(select(TestResult).where(TestResult.run_id.in_([r.id for r in runs]))).all() if runs else []
-    by_run = {r.id: r for r in runs}
-    for res in results:
-        name = by_run[res.run_id].module or "unknown"
-        m = modules.setdefault(name, {"module": name, "failures": 0, "real_bugs": 0})
-        m["failures"] += res.outcome in FAILED
-        m["real_bugs"] += res.outcome == "real_bug"
-    tickets = db.scalars(select(DraftTicket).where(DraftTicket.project_id == project.id, DraftTicket.status == "Filed")).all()
-    ticket_by_pr: dict[int, list] = {}  # every filed ticket of a pull request, from whichever of its runs found the bug
-    for t in tickets:
-        run = db.get(TestRun, db.get(TestResult, t.result_id).run_id)
-        ticket_by_pr.setdefault(run.pr_number, []).append({"key": t.jira_key, "url": t.jira_url})
-
-    def pr_json(r: RiskAssessment) -> dict:
-        run = newest_run.get(r.pr_number)
-        counts = None
-        if run:
-            outs = [x.outcome for x in results if x.run_id == run.id]
-            counts = {"passed": outs.count("passed"), "real_bug": outs.count("real_bug"), "status": run.status}
-        return {"pr_number": r.pr_number, "title": r.title, "risk_label": r.risk_label, "module": r.module,
-                "created_at": r.created_at.isoformat(), "last_run": counts,
-                "tickets": ticket_by_pr.get(r.pr_number, [])}
-
-    return {
-        "enough": len(prs) >= settings.trend_min_pull_requests, "minimum": settings.trend_min_pull_requests,
-        "days": days, "module": module, "total": len(prs),
-        "share": {label: sum(1 for r in prs if r.risk_label == label) for label in ("Low", "Medium", "High")},
-        "periods": sorted(buckets.values(), key=lambda b: b["period"]),
-        "modules": sorted(modules.values(), key=lambda m: (-m["real_bugs"], -m["failures"], m["module"]))[:10],
-        "all_modules": sorted({m for r in latest.values() for m in (loads(r.modules_touched, []) or [r.module]) if m}),
-        "pull_requests": [pr_json(r) for r in sorted(prs, key=lambda r: r.created_at, reverse=True)],
-    }
 
 
 # ---------- JSON for the dashboard ----------
@@ -574,21 +423,13 @@ def result_json(r: TestResult, evidence: list[Evidence]) -> dict:
 
 def draft_json(d: TestDraft) -> dict:
     return {"id": d.id, "run_id": d.run_id, "module": d.module, "file_name": d.file_name, "code": d.code,
-            "status": d.status, "model_used": d.model_used, "created_at": _iso(d.created_at),
-            "memory_used": loads(d.memory_used, [])}
+            "status": d.status, "model_used": d.model_used, "created_at": _iso(d.created_at)}
 
 
 def ticket_json(db: Session, t: DraftTicket) -> dict:
     result = db.get(TestResult, t.result_id)
-    used = [m for m in (db.get(MemoryEntry, i) for i in loads(t.memory_used, [])) if m]
     return {"id": t.id, "result_id": t.result_id, "run_id": result.run_id if result else None,
             "test": result.title if result else None, "title": t.title, "steps": t.steps.splitlines(),
-            "root_cause": t.root_cause, "priority": t.priority, "assignee": t.assignee, "fix_text": t.fix_text,
+            "root_cause": t.root_cause, "priority": t.priority, "assignee": t.assignee,
             "status": t.status, "flagged": t.flagged, "jira_key": t.jira_key, "jira_url": t.jira_url, "error": t.error,
-            "model_used": t.model_used, "created_at": _iso(t.created_at), "filed_at": _iso(t.filed_at),
-            "memory_used": [{"id": m.id, "text": m.text[:200], "pr_number": m.pr_number} for m in used]}
-
-
-def fix_json(f: FixSuggestion) -> dict:
-    return {"id": f.id, "result_id": f.result_id, "diff": f.diff, "explanation": f.explanation, "status": f.status,
-            "model_used": f.model_used, "created_at": _iso(f.created_at)}
+            "model_used": t.model_used, "created_at": _iso(t.created_at), "filed_at": _iso(t.filed_at)}

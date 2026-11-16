@@ -1,7 +1,7 @@
 /**
- * UC4 to UC11 as a tester uses them, in a real browser, against the real app, real Playwright and Newman and a real
+ * UC4 to UC7 as a tester uses them, in a real browser, against the real app, real Playwright and Newman and a real
  * staging app (tests/e2e/server.py). Only the model and Jira are scripted. One account goes through the whole loop in
- * order: staging address, Run Now, results and proof, ticket, fix, drafted test, second run, comparison, trends, memory.
+ * order: staging address, Run Now, results and proof, ticket, drafted test.
  */
 import { expect, test, type Page } from '@playwright/test';
 import { closePages, openRisk, signIn } from './helpers';
@@ -111,19 +111,6 @@ test('UC7 a ticket is checked, edited and filed only when approved', async () =>
   await expect(ticket.getByLabel('Title')).toBeDisabled();               // a filed ticket cannot change
 });
 
-test('UC9 a fix is suggested as text and added to the ticket draft on request', async () => {
-  await page.goto('/verixa_prototype.html#runs');
-  await page.locator('.qruns tr.qres').first().click();
-  await page.locator('tr.qres', { hasText: 'orders' }).click();
-  await page.getByRole('button', { name: 'Suggest a fix' }).click();
-  await expect(page.locator('.qdiff .add')).toContainText('+total = price');
-  await expect(page.getByText('Verixa never changes your repository')).toBeVisible();
-  await page.getByRole('button', { name: 'Add to ticket draft' }).click();
-  await expect(toast(page)).toContainText('Added to the ticket draft');
-  await page.locator('.qticket summary', { hasText: 'Suggested fix in this ticket' }).click();
-  await expect(page.locator('.qticket pre')).toContainText('total = price');
-});
-
 test('UC5 a drafted test is approved into the Test Library', async () => {
   await page.goto('/verixa_prototype.html#runs');
   await page.locator('.qruns tr.qres').first().click();
@@ -136,18 +123,6 @@ test('UC5 a drafted test is approved into the Test Library', async () => {
   await expect(page.locator('section:not([hidden])').getByText('verixa-payments.spec.ts').first()).toBeVisible();
 });
 
-test('UC10 a second run is compared with the first, side by side', async () => {
-  await openRisk(page);
-  await page.locator('tr.risk-row', { hasText: 'Refactor checkout session' }).getByRole('button', { name: 'Run Now' }).click();
-  await waitForRun(page);
-  await page.getByRole('tab', { name: 'Compare runs' }).click();
-  await page.getByRole('button', { name: 'Compare' }).click();
-  await expect(page.locator('.qtag', { hasText: 'new test' }).first()).toBeVisible();   // the approved drafted test
-  await expect(page.locator('.qtag', { hasText: 'still failing' }).first()).toBeVisible();
-  await page.locator('tr.qres', { hasText: 'cart total is right' }).click();
-  await expect(page.locator('.qside h4')).toHaveText(['Before', 'After']);
-});
-
 test('UC7 the Tickets screen separates waiting and filed tickets, and a ticket can be rejected', async () => {
   await page.goto('/verixa_prototype.html#tickets');
   await page.getByRole('tab', { name: /Filed/ }).click();
@@ -157,37 +132,6 @@ test('UC7 the Tickets screen separates waiting and filed tickets, and a ticket c
   await first.locator('.qcard-head').click();
   await first.getByRole('button', { name: 'Reject' }).click();
   await expect(toast(page)).toContainText('Nothing was sent to Jira');
-});
-
-test('UC11 trends show the share of risk and the modules that fail most', async () => {
-  await page.goto('/verixa_prototype.html#trends');
-  const view = page.locator('section:not([hidden])');
-  await expect(view.locator('.risk-stat.high .risk-stat-value')).not.toHaveText('0');
-  await expect(page.locator('.qhbar', { hasText: 'payments' })).toContainText('real bugs');
-  await expect(view.locator('tr', { hasText: 'Refactor checkout session' })).toContainText(/QA-\d+/);  // its filed ticket
-  await view.locator('label', { hasText: 'Period' }).locator('select').selectOption('7');
-  await view.locator('.qhbar', { hasText: 'payments' }).click();
-  await expect(page.getByRole('heading', { name: 'Pull requests touching payments' })).toBeVisible();
-});
-
-test('UC8 QA Memory lists what was learned and a wrong entry can be removed', async () => {
-  await page.goto('/verixa_prototype.html#memory');
-  const rows = page.locator('.qmemrow');
-  await expect(rows.first()).toBeVisible();
-  const before = await rows.count();
-  await rows.first().getByRole('button', { name: /Remove memory entry/ }).click();
-  await expect(toast(page)).toContainText('Memory entry removed');
-  await expect(rows).toHaveCount(before - 1);
-});
-
-test('UC8 a risk label can be marked wrong, and that is saved to QA Memory', async () => {
-  await openRisk(page);
-  await page.locator('tr.risk-row', { hasText: '#1' }).first().click();
-  await page.getByLabel('Mark this label as wrong').selectOption({ index: 1 });
-  await expect(toast(page)).toContainText('Saved to QA Memory');
-  await expect(page.getByText('you marked this label wrong')).toBeVisible();
-  await page.goto('/verixa_prototype.html#memory');
-  await expect(page.getByText(/was marked wrong/).first()).toBeVisible();
 });
 
 test('another account sees none of it, on screen or through the API', async ({ browser, baseURL }) => {
@@ -202,7 +146,7 @@ test('another account sees none of it, on screen or through the API', async ({ b
 
 test('the new screens fit a phone without sideways scrolling', async () => {
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const view of ['runs', 'tickets', 'trends', 'memory', 'connect']) {
+  for (const view of ['runs', 'tickets', 'connect']) {
     await page.goto(`/verixa_prototype.html#${view}`);
     await page.waitForLoadState('networkidle');
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

@@ -35,15 +35,6 @@ class Settings(BaseSettings):
     # Staging may be a computer on the local network while developing. Cloud metadata addresses are always refused.
     allow_private_staging: bool = True
 
-    # ---- QA Memory (UC8). Empty EMBEDDING_MODEL: a local word vector, so no failure text leaves the server ----
-    embedding_model: str = ""            # for example gemini/text-embedding-004, called through LiteLLM
-    embedding_dim: int = 256
-    memory_top_k: int = 5
-    memory_min_similarity: float = 0.35
-
-    # ---- Trends (UC11, TBD17) ----
-    trend_min_pull_requests: int = 3
-
     @field_validator("secret_key", "webhook_secret")
     @classmethod
     def long_enough(cls, value: str) -> str:

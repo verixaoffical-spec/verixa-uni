@@ -13,7 +13,7 @@ from unittest import mock
 from agents import report
 from agents.supervisor import supervise
 from backend import execution as ex
-from backend import memory, qa_service as qa
+from backend import qa_service as qa
 from backend.validators import validate_spec
 
 SPEC = "import { test, expect } from '@playwright/test';\n%s\n"
@@ -51,24 +51,19 @@ class SelectionTests(unittest.TestCase):
              "misc.spec.ts": spec("footer shows the year")}
 
     def test_high_risk_runs_everything(self):
-        chosen, why = qa.select_tests(self.specs, "High", ["cart"], set())
+        chosen, why = qa.select_tests(self.specs, "High", ["cart"])
         self.assertEqual(chosen, sorted(self.specs))
         self.assertIn("full regression", why)
 
     def test_module_matches_by_file_name_or_title(self):
-        self.assertEqual(qa.select_tests(self.specs, "Medium", ["cart"], set())[0], ["cart.spec.ts"])
-        self.assertEqual(qa.select_tests(self.specs, "Low", ["login"], set())[0], ["login.spec.ts"])
-        self.assertEqual(qa.select_tests(self.specs, "Low", ["footer"], set())[0], ["misc.spec.ts"])
+        self.assertEqual(qa.select_tests(self.specs, "Medium", ["cart"])[0], ["cart.spec.ts"])
+        self.assertEqual(qa.select_tests(self.specs, "Low", ["login"])[0], ["login.spec.ts"])
+        self.assertEqual(qa.select_tests(self.specs, "Low", ["footer"])[0], ["misc.spec.ts"])
 
     def test_no_match_or_no_module_runs_everything_to_be_safe(self):
         for modules in (["payments"], [], ["root"], [""], ["ab"]):
             with self.subTest(modules=modules):
-                self.assertEqual(qa.select_tests(self.specs, "Low", modules, set())[0], sorted(self.specs))
-
-    def test_specs_that_failed_here_before_are_added(self):
-        chosen, why = qa.select_tests(self.specs, "Medium", ["cart"], {"misc.spec.ts", "deleted.spec.ts"})
-        self.assertEqual(chosen, ["cart.spec.ts", "misc.spec.ts"])
-        self.assertIn("QA Memory", why)
+                self.assertEqual(qa.select_tests(self.specs, "Low", modules)[0], sorted(self.specs))
 
     def test_coverage(self):
         self.assertTrue(qa.covered("cart", self.specs, None))
@@ -208,16 +203,6 @@ class AgentCheckTests(unittest.TestCase):
             with self.subTest(answer=answer):
                 self.assertTrue(report.check_explanation(answer, "cart total is right", self.error))
 
-    def test_fix_checks(self):
-        diff = "--- a/src/cart.js\n+++ b/src/cart.js\n@@ -1 +1 @@\n-total += fee\n+total = sum(items)\n"
-        good = {"diff": diff, "explanation": "The fee was added twice. This keeps only the item sum in the total."}
-        self.assertEqual(report.check_fix(good, ["src/cart.js"]), [])
-        for answer, files in ((good, ["src/other.js"]), ({**good, "diff": "just change it"}, []),
-                              ({**good, "explanation": "fix"}, []), ({"diff": 1}, []), ("x", []),
-                              ({**good, "diff": diff + "+key = 'ghp_" + "a" * 30 + "'\n"}, ["src/cart.js"])):
-            with self.subTest(answer=answer):
-                self.assertTrue(report.check_fix(answer, files))
-
     def test_drafted_test_checks_use_the_library_rules(self):
         good = {"code": spec("wishlist shows saved items", goto="/wishlist")}
         self.assertEqual(report.check_draft(good, "wishlist", validate_spec), [])
@@ -250,28 +235,3 @@ class SupervisorTests(unittest.TestCase):
         answer, attempts, problems = asyncio.run(supervise("t", work, lambda a: [], attempts=3))
         self.assertEqual((answer, attempts), (None, 3))
         self.assertIn("model down", problems[0])
-
-
-class MemoryVectorTests(unittest.TestCase):
-    def test_similar_failures_are_closer_than_unrelated_ones(self):
-        a = memory._local_vector("cart total wrong after adding two notebooks expected 20 received 30")
-        b = memory._local_vector("cart total wrong after adding notebooks expected 40 received 50")
-        c = memory._local_vector("login page password reset email never arrives")
-        self.assertGreater(memory.cosine(a, b), memory.cosine(a, c))
-        self.assertAlmostEqual(memory.cosine(a, a), 1.0, places=3)
-        self.assertEqual(len(a), memory.settings.embedding_dim)
-
-    def test_odd_inputs(self):
-        self.assertEqual(memory.cosine([], []), 0.0)
-        self.assertEqual(memory.cosine([1.0], [1.0, 2.0]), 0.0)
-        self.assertEqual(len(memory._local_vector("")), memory.settings.embedding_dim)
-        self.assertEqual(len(memory._local_vector("😀 \x00 ✓")), memory.settings.embedding_dim)
-
-    def test_a_broken_embedding_provider_falls_back_to_the_local_vector(self):
-        with mock.patch.object(memory.settings, "embedding_model", "nope/model"), \
-             mock.patch("litellm.embedding", side_effect=RuntimeError("down")):
-            self.assertEqual(memory.embed("cart total"), memory._local_vector("cart total"))
-
-
-if __name__ == "__main__":
-    unittest.main()
