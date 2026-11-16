@@ -219,3 +219,42 @@ cd tests\e2e; npx playwright test --project=inputs
 ```
 
 The table of every input and its result is written to `tests/e2e/test-results/inputs.md`.
+
+## 11. The demo with the Shoplite staging shop
+
+`staging/server.py` is a small shop made for showing Verixa. It needs only Python.
+
+```powershell
+python staging\server.py          # the shop:     http://127.0.0.1:4000
+                                  # the switches: http://127.0.0.1:4000/demo
+```
+
+**Set up once**
+
+1. In Verixa, open **Integrations** and save the staging address `http://127.0.0.1:4000`.
+2. Open the **Test Library** and upload from `samples/test-data/shoplite/`:
+   `shoplite-cart.spec.ts`, `shop.spec.ts`, `shoplite-wishlist.spec.ts` and, on the Postman tab, `shoplite.postman_collection.json`.
+3. Press **Confirm import**.
+
+**The demo, one Run Now per row** (use a High risk pull request so every test runs)
+
+| On `/demo` | Press Run Now, then show | Why it matters |
+|---|---|---|
+| Everything off | 13 passed, 1 deployment pending (the wishlist test) | A page that is not on staging yet is not called a bug |
+| **Cart bug** on | 2 real bugs: "adding a product updates the cart total" and "customer can log in, add a product and check out". Open one: screenshot shows 49.98 where 24.99 was expected | A real bug with proof, and a ticket draft waiting for approval |
+| **Orders bug** on (cart bug off) | Real bugs "Checkout" (API, answered 500) and "checkout places the order" (UI) | The same fault is caught by the API test and the UI test |
+| **Wishlist page is deployed** on | The wishlist test now runs and passes | Deployment pending goes away once the page exists |
+
+After the cart bug run: approve the ticket, press **Suggest a Fix**, then run again with the bug off and open
+**Compare runs** to show "fixed".
+
+**Inputs to try on the shop itself**
+
+| Input | Expected |
+|---|---|
+| `customer@shoplite.test` / `Customer123!` | Logged in, the email shows at the top |
+| `customer@shoplite.test` / `Wrong-password-1` | "Email or password is incorrect", still Guest |
+| Add to cart while logged out | "Please login first" |
+| Checkout with an empty cart | "The order could not be placed" |
+
+This demo is checked automatically by `python -m unittest tests.test_staging_demo`, with real Playwright and Newman.
