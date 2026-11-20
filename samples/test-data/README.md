@@ -220,41 +220,76 @@ cd tests\e2e; npx playwright test --project=inputs
 
 The table of every input and its result is written to `tests/e2e/test-results/inputs.md`.
 
-## 11. The demo with the Shoplite staging shop
+## 11. The demo with the TaskFlow staging site
 
-`staging/server.py` is a small shop made for showing Verixa. It needs only Python.
+`staging/server.py` is TaskFlow, a small ordinary website: a home page, pricing, a contact form, a sign in, a task
+dashboard and an API. It is not a shop. Verixa tests any website, and this one only gives it something to find.
+It needs only Python.
 
 ```powershell
-python staging\server.py          # the shop:     http://127.0.0.1:4000
+python staging\server.py          # the site:     http://127.0.0.1:4000
                                   # the switches: http://127.0.0.1:4000/demo
 ```
 
 **Set up once**
 
 1. In Verixa, open **Integrations** and save the staging address `http://127.0.0.1:4000`.
-2. Open the **Test Library** and upload from `samples/test-data/shoplite/`:
-   `shoplite-cart.spec.ts`, `shop.spec.ts`, `shoplite-wishlist.spec.ts` and, on the Postman tab, `shoplite.postman_collection.json`.
+2. Open the **Test Library**. If the demo's own files are there, delete them. Upload from `samples/test-data/demo-site/`:
+   `taskflow.spec.ts` and `taskflow-docs.spec.ts`, and on the Postman tab `taskflow.postman_collection.json`.
 3. Press **Confirm import**.
 
 **The demo, one Run Now per row** (use a High risk pull request so every test runs)
 
 | On `/demo` | Press Run Now, then show | Why it matters |
 |---|---|---|
-| Everything off | 13 passed, 1 deployment pending (the wishlist test) | A page that is not on staging yet is not called a bug |
-| **Cart bug** on | 2 real bugs: "adding a product updates the cart total" and "customer can log in, add a product and check out". Open one: screenshot shows 49.98 where 24.99 was expected | A real bug with proof, and a ticket draft waiting for approval |
-| **Orders bug** on (cart bug off) | Real bugs "Checkout" (API, answered 500) and "checkout places the order" (UI) | The same fault is caught by the API test and the UI test |
-| **Wishlist page is deployed** on | The wishlist test now runs and passes | Deployment pending goes away once the page exists |
+| Everything off | 14 passed, 1 deployment pending (the Docs page test) | A page that is not on staging yet is not called a bug |
+| **Pricing bug** on | 2 real bugs: the pricing screen test (yearly Pro shows $120, expected $96) and the API test "List plans" | The same fault is caught from the screen and from the API |
+| **Contact bug** on | 2 real bugs: the contact form screen test and the API request "Contact message is accepted" (answered 500) | A server error has proof: screenshot, logs, status |
+| **Tasks bug** on | 2 real bugs: "a signed in user can add a task..." and "The task is in the list" | A fault that answers 201 but loses the data |
+| **Docs page is deployed** on | The Docs test now runs and passes | Deployment pending goes away once the page exists |
 
-After the cart bug run: approve the ticket, press **Suggest a Fix**, then run again with the bug off and open
-**Compare runs** to show "fixed".
+Then approve a ticket draft. In version 2 also press **Suggest a fix**, switch the bug off, run again and open
+**Compare runs** to see "fixed".
 
-**Inputs to try on the shop itself**
+**Inputs to try on the site itself**
 
 | Input | Expected |
 |---|---|
-| `customer@shoplite.test` / `Customer123!` | Logged in, the email shows at the top |
-| `customer@shoplite.test` / `Wrong-password-1` | "Email or password is incorrect", still Guest |
-| Add to cart while logged out | "Please login first" |
-| Checkout with an empty cart | "The order could not be placed" |
+| Sign in with `demo@taskflow.test` / `Taskflow123!` | The task dashboard opens |
+| Sign in with `demo@taskflow.test` / `Wrong-password-1` | "Email or password is incorrect" |
+| Contact form with every field empty | "Please fill in every field" |
+| Contact form with a name, an email and a message | "Thanks, we got your message" |
+| `http://127.0.0.1:4000/docs` while the Docs switch is off | 404 |
+| `http://127.0.0.1:4000/no-such-page` | "Page not found" |
 
 This demo is checked automatically by `python -m unittest tests.test_staging_demo`, with real Playwright and Newman.
+
+## 12. Testing a live website (FYP Forge)
+
+Verixa runs against any website that has an http or https address, so it can also test a site that is already live.
+Your own website is `https://fypmate-ai.lovable.app` (FYP Forge). The files in `samples/test-data/fyp-forge/` were
+written from what that site really shows today.
+
+**Keep a live run read only.** The SRS says tests run on staging and never on the live system (BR8), but Verixa cannot
+tell whether an address is live, so the tester has to choose safe tests. These files only look and click. They never
+create an account, never sign in with a real one, and never send, buy or delete anything. The one sign in attempt uses
+the made up address `verixa.check@example.invalid` and is refused.
+
+1. In **Integrations** save the staging address `https://fypmate-ai.lovable.app`.
+2. In the **Test Library** upload `fyp-forge.spec.ts` and, on the Postman tab, `fyp-forge.postman_collection.json`.
+3. Press **Run Now** on any scored pull request.
+
+| Test | What it checks |
+|---|---|
+| The home page sends a visitor to the sign in page | `/` goes to `/auth`, the title has "FYP Forge", the heading is "Welcome Back" |
+| The sign in form has an email and a password field | Both fields are there |
+| An empty form says what is required | "Email is required" and "Password is required" |
+| A wrong password is refused | "Invalid email or password", the visitor stays on `/auth` |
+| The Sign Up tab shows the account form | "Create Your Account" |
+| The page fits a phone | No sideways scrolling at 390 px |
+| The page loads without a console error | No page error, no console error |
+| API requests | `/`, `/auth`, `/robots.txt` and `/sitemap.xml` answer 200 with the right type, and the home page answers in under 3 seconds |
+
+**A limit to know about.** FYP Forge is a single page app: every address, even one that does not exist, answers 200 with
+the same page. Verixa marks a test "deployment pending" when a page answers 404, so on a site like this a missing page
+shows as a failed test, not as pending.
