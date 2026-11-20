@@ -275,7 +275,7 @@ Version 2 keeps everything above and adds four features. Three of them also make
 | Proof | Files on the server disk | Keeps the database small |
 
 Folders: `backend/` (server), `agents/` (the agents), `frontend/` (dashboard), `runner/` (Playwright and Newman),
-`staging/` (the demo shop), `samples/` (files to try), `tests/` (all tests).
+`staging/` (the TaskFlow demo site), `samples/` (files to try), `tests/` (all tests).
 
 ## 11. How it was tested
 
@@ -307,7 +307,8 @@ Tests never touch the real database: they run on their own test database and ref
 
 ## 13. A ten minute demo
 
-Start the staging shop with `python staging\server.py`. Its switches are at `http://127.0.0.1:4000/demo`.
+Start the TaskFlow staging site with `python staging\server.py`. Its switches are at `http://127.0.0.1:4000/demo`.
+TaskFlow is an ordinary website (pages, a form, a sign in, a dashboard, an API), not a shop: Verixa tests any website.
 
 | Minute | Show | Say |
 |---|---|---|
@@ -315,13 +316,18 @@ Start the staging shop with `python staging\server.py`. Its switches are at `htt
 | 1 to 2 | Integrations: GitHub, Jira, staging address | "Set up once. The webhook is created for you" |
 | 2 to 3 | Test Library: upload a good file and a bad one | "Every file is checked twice. Dangerous code is refused" |
 | 3 to 4 | Risk Analysis: open a High pull request | "The label comes from rules. The model only explains it" |
-| 4 to 6 | Switch on **Cart bug**, press **Run Now** | "One click. Both tools run. Watch it live" |
-| 6 to 7 | Open the real bug: screenshot shows 49.98, not 24.99 | "Proof in one place. The wishlist test is pending, not failed" |
+| 4 to 6 | Switch on **Pricing bug**, press **Run Now** | "One click. Both tools run. Watch it live" |
+| 6 to 7 | Open the real bug: the screenshot shows $120 where $96 was expected | "Proof in one place. The Docs test is pending, not failed" |
 | 7 to 8 | Jira Tickets: edit, then approve | "Nothing reached Jira until now" |
 | 8 to 9 | V2: **Suggest a fix**, then switch the bug off and run again | "Text only. Nothing is applied" |
 | 9 to 10 | V2: **Compare runs**, **Risk Trends**, **QA Memory** | "Fixed. And Verixa remembers it for the next pull request" |
 
 Sample files and more inputs are in [samples/test-data/README.md](samples/test-data/README.md).
+
+**Testing a live website.** Verixa accepts any http or https address, so it can run against a site that is already
+live. Keep such a run read only: look and click, never sign up, buy or delete. `samples/test-data/fyp-forge/` holds
+read only tests for the team's own website, https://fypmate-ai.lovable.app. The SRS says tests run on staging (BR8),
+and Verixa cannot tell a live address from a staging one, so choosing safe tests is the tester's job.
 
 ## 14. Questions and short answers
 

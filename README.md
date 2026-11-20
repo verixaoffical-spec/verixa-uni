@@ -83,13 +83,13 @@ Copy `.env.example` to `.env` and fill it in. Never commit `.env`.
 
 Log in with `demo@verixa.dev` and the password `Verixa-Demo-2026`.
 
-**The staging shop for demos**, a small shop with bugs you can switch on and off:
+**The staging site for demos**, TaskFlow, a small website with bugs you can switch on and off:
 
 ```powershell
-python staging\server.py                           # shop: http://127.0.0.1:4000   switches: /demo
+python staging\server.py                           # site: http://127.0.0.1:4000   switches: /demo
 ```
 
-The demo steps are in section 11 of [samples/test-data/README.md](samples/test-data/README.md).
+The demo steps are in section 11 of [samples/test-data/README.md](samples/test-data/README.md). Section 12 shows how to test a live site, such as your own website, read only.
 
 ## Test it
 
@@ -109,7 +109,7 @@ Python tests use their own test database and refuse to start any other way, so t
 | `agents/` | The Analysis, Test and Report agents and the Manager |
 | `frontend/` | The React dashboard |
 | `runner/` | Playwright and Newman, which run the tester's tests |
-| `staging/` | The demo shop |
+| `staging/` | The TaskFlow demo site |
 | `samples/` | Sample specs, collections and inputs |
 | `tests/` | Python tests, and browser tests in `tests/e2e/` |
 
