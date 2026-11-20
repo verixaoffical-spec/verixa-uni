@@ -4,9 +4,8 @@ Verixa sits between GitHub, Playwright, Newman and Jira. When a pull request is 
 change is. When the tester presses **Run Now** it runs the right tests on staging, collects proof for every
 failure and drafts a Jira ticket. **Nothing reaches Jira until the tester approves it.**
 
-**This branch is `verixa-fyp1`: version 1.** It holds the seven FYP I use cases of the SRS (UC1 to UC7).
-Version 2 adds QA Memory, Suggest a Fix, Regression Comparison and Risk Trends (UC8 to UC11) in the branch
-`verixa-fyp2`, which is this branch with one commit on top.
+**This branch is `verixa-fyp2`: version 2.** It holds all eleven use cases of the SRS (UC1 to UC11).
+Version 1 (UC1 to UC7 only) is the branch `verixa-fyp1`. Version 2 is version 1 with one commit on top.
 
 ## What to read
 
@@ -31,6 +30,10 @@ Version 2 adds QA Memory, Suggest a Fix, Regression Comparison and Risk Trends (
 | UC5 | Coverage Gap Test Drafting | A draft test for changed code that no test covers | Test Runs |
 | UC6 | Results and Evidence View | Screenshot, trace and logs of each failure in one place | Test Runs |
 | UC7 | Manual File to Jira | A ticket draft per real bug, filed only when the tester approves | Jira Tickets |
+| UC8 | QA Memory | Past bugs and decisions are saved and reused by the agents | QA Memory |
+| UC9 | Suggest a Fix | A code fix as text for a real bug, never applied | Test Runs |
+| UC10 | Regression Comparison | Two runs side by side: new failure, fixed, still failing | Test Runs |
+| UC11 | Cross PR Risk Trend Reporting | Risk and failures over time, per module | Risk Trends |
 
 ## How it works
 
@@ -83,13 +86,13 @@ Copy `.env.example` to `.env` and fill it in. Never commit `.env`.
 
 Log in with `demo@verixa.dev` and the password `Verixa-Demo-2026`.
 
-**The staging site for demos**, TaskFlow, a small website with bugs you can switch on and off:
+**The staging shop for demos**, a small shop with bugs you can switch on and off:
 
 ```powershell
-python staging\server.py                           # site: http://127.0.0.1:4000   switches: /demo
+python staging\server.py                           # shop: http://127.0.0.1:4000   switches: /demo
 ```
 
-The demo steps are in section 11 of [samples/test-data/README.md](samples/test-data/README.md). Section 12 shows how to test a live site, such as your own website, read only.
+The demo steps are in section 11 of [samples/test-data/README.md](samples/test-data/README.md).
 
 ## Test it
 
@@ -98,7 +101,7 @@ The demo steps are in section 11 of [samples/test-data/README.md](samples/test-d
 cd tests\e2e; npx playwright test --project=qa; npx playwright test --project=inputs
 ```
 
-505 Python tests pass. The browser suites give 157 passed and 1 skipped on purpose. 54 inputs are checked.
+518 Python tests pass. The browser suites give 162 passed and 1 skipped on purpose. 68 inputs are checked.
 Python tests use their own test database and refuse to start any other way, so the real database is never touched.
 
 ## Folders
@@ -109,7 +112,7 @@ Python tests use their own test database and refuse to start any other way, so t
 | `agents/` | The Analysis, Test and Report agents and the Manager |
 | `frontend/` | The React dashboard |
 | `runner/` | Playwright and Newman, which run the tester's tests |
-| `staging/` | The TaskFlow demo site |
+| `staging/` | The demo shop |
 | `samples/` | Sample specs, collections and inputs |
 | `tests/` | Python tests, and browser tests in `tests/e2e/` |
 
