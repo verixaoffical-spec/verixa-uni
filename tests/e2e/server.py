@@ -230,8 +230,10 @@ def script_test_agent() -> None:
         db.commit()
 
     async def explain(test, error, *args):
-        return {"likely_cause": f"The test {test} fails because {error.splitlines()[0][:120]}. The cart total or the orders "
-                                "endpoint returns the wrong value.", "steps": ["Open the shop", "Look at the cart total"], "model": "scripted"}
+        return {"likely_cause": f"The test {test} fails because {error.splitlines()[0][:120]}. The page or endpoint it checks "
+                                "returns a different value than the test expects.",
+                "steps": ["Open the staging app", f"Repeat what the test \"{test[:120]}\" does", "Compare the result with what the test expects"],
+                "model": "scripted"}
 
     async def draft(module, code, name, feedback):
         return {"code": "import { test, expect } from '@playwright/test';\n"
