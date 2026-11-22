@@ -20,7 +20,10 @@
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
 
   /* ---------- scene behind the glass ---------- */
-  .scene{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
+  /* The scene scrolls away with the form and fades into the page colour, so the footer below starts on a plain
+     background like it does on the landing page, with no hard edge */
+  .scene{position:absolute;top:0;left:0;right:0;height:100vh;height:100svh;z-index:0;pointer-events:none;overflow:hidden;
+    -webkit-mask-image:linear-gradient(#000 55%,transparent);mask-image:linear-gradient(#000 55%,transparent);}
   .scene .grid{position:absolute;inset:-1px;
     background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
     background-size:56px 56px;
@@ -122,7 +125,12 @@
   .control input:focus{border-color:hsl(var(--accent)/.75);background:rgba(5,5,10,.6);box-shadow:0 0 0 4px hsl(var(--accent)/.16),inset 0 1px 2px rgba(0,0,0,.35);}
   .control input[aria-invalid="true"]{border-color:rgba(235,118,118,.65);}
   .control input[aria-invalid="true"]:focus{box-shadow:0 0 0 4px rgba(235,118,118,.14);}
-  .control input:-webkit-autofill{-webkit-text-fill-color:#fff;caret-color:#fff;transition:background-color 600000s 0s,color 600000s 0s;}
+  /* A browser that fills in a saved email or password paints the box white. An inset shadow covers that paint,
+     so a filled-in box looks the same as one the user typed into */
+  .control input:-webkit-autofill{-webkit-text-fill-color:#fff;caret-color:#fff;
+    -webkit-box-shadow:0 0 0 1000px #0d0c15 inset;box-shadow:0 0 0 1000px #0d0c15 inset;transition:background-color 600000s 0s,color 600000s 0s;}
+  .control input:-webkit-autofill:focus{
+    -webkit-box-shadow:0 0 0 1000px #0d0c15 inset,0 0 0 4px hsl(var(--accent)/.16);box-shadow:0 0 0 1000px #0d0c15 inset,0 0 0 4px hsl(var(--accent)/.16);}
   .control.has-eye input{padding-right:48px;}
   .eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:36px;height:36px;display:grid;place-items:center;
        border:0;border-radius:9px;background:none;color:var(--faint);transition:color .2s,background .2s;}
@@ -220,7 +228,10 @@
   :root[data-theme="light"] .control input:hover{border-color:rgba(15,15,40,.24);}
   :root[data-theme="light"] .control input:focus{background:#fff;border-color:hsl(var(--accent)/.75);box-shadow:0 0 0 4px hsl(var(--accent)/.16);}
   :root[data-theme="light"] .control input[aria-invalid="true"]{border-color:rgba(196,61,61,.6);}
-  :root[data-theme="light"] .control input:-webkit-autofill{-webkit-text-fill-color:#0A0A14;caret-color:#0A0A14;}
+  :root[data-theme="light"] .control input:-webkit-autofill{-webkit-text-fill-color:#0A0A14;caret-color:#0A0A14;
+    -webkit-box-shadow:0 0 0 1000px #fff inset;box-shadow:0 0 0 1000px #fff inset;}
+  :root[data-theme="light"] .control input:-webkit-autofill:focus{
+    -webkit-box-shadow:0 0 0 1000px #fff inset,0 0 0 4px hsl(var(--accent)/.16);box-shadow:0 0 0 1000px #fff inset,0 0 0 4px hsl(var(--accent)/.16);}
   :root[data-theme="light"] .eye:hover{color:#0A0A14;background:rgba(15,15,40,.05);}
   :root[data-theme="light"] .err button{color:#4B3FC4;}
   :root[data-theme="light"] .caps{color:#8A5A00;}
@@ -255,3 +266,9 @@
   @media (prefers-reduced-transparency:reduce){
     .glass{background:#0f0f14;backdrop-filter:none;-webkit-backdrop-filter:none;}
   }
+
+  /* The footer on these pages scrolls in like a normal last section. The landing page reveals it from behind the page,
+     but under a short form that reveal cuts the footer in half while scrolling. A fade blends its grid into the page */
+  .curtain-inner{position:absolute;}
+  .curtain::before{content:"";position:absolute;left:0;right:0;top:0;height:180px;z-index:3;pointer-events:none;
+    background:linear-gradient(var(--bg),transparent);}
