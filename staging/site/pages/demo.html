@@ -1,0 +1,20 @@
+<section class="page-head">
+  <div class="shell demo-wrap">
+    <h1>Demo switches</h1>
+    <p class="page-lead">This page is for the Verixa demo and is not part of TaskFlow. Change a switch, then press Run Now in Verixa. Restarting the site turns everything off.</p>
+    <label class="switch"><input type="checkbox" id="pricing_bug"><span><b>Pricing bug</b>The yearly price forgets the 20% discount.</span></label>
+    <label class="switch"><input type="checkbox" id="contact_bug"><span><b>Contact bug</b>Sending the contact form fails with a server error.</span></label>
+    <label class="switch"><input type="checkbox" id="tasks_bug"><span><b>Tasks bug</b>A new task is accepted but not saved.</span></label>
+    <label class="switch"><input type="checkbox" id="docs_page"><span><b>Docs page is deployed</b>Off: /docs answers 404, so its test is "deployment pending".</span></label>
+    <p><a href="/">Open the site</a></p>
+  </div>
+</section>
+<script>
+fetch('/demo/state').then(r => r.json()).then(state => {
+  for (const [name, on] of Object.entries(state)) {
+    const box = document.getElementById(name);
+    box.checked = on;
+    box.onchange = () => fetch('/demo/set', { method: 'POST', body: JSON.stringify({ name, on: box.checked }) });
+  }
+});
+</script>

@@ -1,0 +1,31 @@
+<section class="auth">
+  <div class="auth-form">
+    <h1>Sign in</h1>
+    <p class="auth-hint">Welcome back. To look around, use the demo account <b>demo@taskflow.test</b>.</p>
+    <form id="form">
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="off">
+      <label for="password">Password</label>
+      <input id="password" type="password">
+      <button class="btn btn-pine btn-lg btn-block" type="submit">Sign in</button>
+      <p id="msg" role="alert" class="form-msg is-error"></p>
+    </form>
+    <p class="auth-foot">New to TaskFlow? <a href="/pricing">Compare the plans</a></p>
+  </div>
+  <aside class="auth-side">
+    <blockquote>Our Monday meeting went from an hour to ten minutes, because the board already answers most of it.</blockquote>
+    <p><b>Maya Chen</b>, Head of Operations at Northwind</p>
+  </aside>
+</section>
+<script>
+const $ = id => document.getElementById(id);
+$('form').onsubmit = async event => {
+  event.preventDefault();
+  const res = await fetch('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: $('email').value, password: $('password').value }) });
+  if (!res.ok) return $('msg').textContent = 'Email or password is incorrect';
+  const data = await res.json();
+  sessionStorage.setItem('token', data.token);
+  sessionStorage.setItem('email', data.email);
+  location.href = '/app';
+};
+</script>

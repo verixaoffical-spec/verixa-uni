@@ -1,0 +1,65 @@
+<div class="app">
+  <aside class="app-side" aria-label="Workspace">
+    <p class="ws"><span class="ws-mark">N</span>Northwind</p>
+    <nav aria-label="Views">
+      <a class="is-on" href="/app">My tasks</a>
+      <a href="/app">Today</a>
+      <a href="/app">Upcoming</a>
+    </nav>
+    <p class="side-head">Projects</p>
+    <nav aria-label="Projects">
+      <a href="/app"><i style="background:#F2B8A2"></i>Website relaunch</a>
+      <a href="/app"><i style="background:#B9D7F0"></i>Hiring</a>
+      <a href="/app"><i style="background:#CFE6B8"></i>Office move</a>
+    </nav>
+    <a class="side-upgrade" href="/pricing">Upgrade to Pro</a>
+  </aside>
+  <section class="app-main">
+    <div class="app-bar">
+      <input class="app-search" type="search" placeholder="Search" aria-label="Search">
+      <span id="who" class="who"></span>
+      <button type="button" id="out" class="btn btn-line btn-sm">Sign out</button>
+    </div>
+    <h1>Your tasks</h1>
+    <form id="form" class="add-row">
+      <div class="add-field">
+        <label for="title">New task</label>
+        <input id="title" placeholder="For example: send the October invoice">
+      </div>
+      <button class="btn btn-pine" type="submit">Add task</button>
+    </form>
+    <ul id="tasks" class="task-list"></ul>
+    <p id="none" class="task-empty">Nothing here yet. Add the first thing your team needs to do.</p>
+  </section>
+</div>
+<script>
+const token = sessionStorage.getItem('token');
+if (!token) location.href = '/signin';
+document.getElementById('who').textContent = sessionStorage.getItem('email');
+const call = body => fetch('/api/tasks', { method: body ? 'POST' : 'GET', body: body ? JSON.stringify(body) : undefined,
+  headers: { Authorization: 'Bearer ' + token } }).then(r => r.json());
+const load = async () => {
+  const list = document.getElementById('tasks');
+  list.textContent = '';
+  const tasks = await call();
+  for (const t of tasks) {
+    const li = document.createElement('li');
+    const box = document.createElement('span'); box.className = 'box';
+    const text = document.createElement('span'); text.className = 'task-title'; text.textContent = t.title;
+    const when = document.createElement('em'); when.textContent = 'No date';
+    li.append(box, text, when);
+    list.append(li);
+  }
+  document.getElementById('none').hidden = tasks.length > 0;
+};
+document.getElementById('form').onsubmit = async event => {
+  event.preventDefault();
+  const box = document.getElementById('title');
+  if (!box.value.trim()) return;
+  await call({ title: box.value.trim() });
+  box.value = '';
+  load();
+};
+document.getElementById('out').onclick = () => { sessionStorage.clear(); location.href = '/signin'; };
+load();
+</script>
