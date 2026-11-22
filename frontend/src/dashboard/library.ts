@@ -34,6 +34,7 @@ export interface Rejected {
   kind: Kind;
   name: string;
   reasons: string[];
+  file?: PickedFile;  // kept when the file itself was fine and only its slot was taken, so it can be tried again
 }
 
 export interface Library {
@@ -122,8 +123,8 @@ export function applyRequest(lib: Library) {
 let lastRejectedId = 0;
 
 // Adds a rejected file, replacing an older rejection of the same file
-function reject(list: Rejected[], kind: Kind, name: string, reasons: string[]): Rejected[] {
-  return [...list.filter(r => !(r.kind === kind && r.name === name)), { id: ++lastRejectedId, kind, name, reasons }];
+function reject(list: Rejected[], kind: Kind, name: string, reasons: string[], file?: PickedFile): Rejected[] {
+  return [...list.filter(r => !(r.kind === kind && r.name === name)), { id: ++lastRejectedId, kind, name, reasons, file }];
 }
 
 export const dismissRejected = (lib: Library, id: number): Library =>
@@ -190,7 +191,8 @@ export function addCollectionFile(lib: Library, files: PickedFile[], replacing =
   if (current && !replacing) {
     for (const f of files) {
       rejected = reject(rejected, 'pm', f.name, [`Only one Postman collection is allowed, and "${current.name}" is already added. ` +
-        'To use this one instead, click Replace file on the current collection, or delete it first']);
+        'To use this one instead, click Replace file on the current collection, or delete it first and click Try again'],
+        f.text === null ? undefined : f);
     }
     return { ...lib, rejected };
   }

@@ -116,14 +116,17 @@ export function CollectionCard({ collection: c, status, library, onReplace }: Co
 }
 
 // A file that did not pass the checks, with the reasons
-export function RejectedCard({ item, onRetry, onDismiss }: { item: Rejected; onRetry: () => void; onDismiss: () => void }) {
+export function RejectedCard({ item, onRetry, onTryAgain, onDismiss }:
+  { item: Rejected; onRetry: () => void; onTryAgain?: () => void; onDismiss: () => void }) {
   return (
     <article className="rejcard">
       <header>
         <span className="fi">{icons.alert}</span>
-        <div className="fmeta"><b className="fname">{item.name}</b><small>Not added. Fix the file and try again.</small></div>
+        <div className="fmeta"><b className="fname">{item.name}</b>
+          <small>{onTryAgain ? 'Not added yet. The file is fine, only the slot is taken.' : 'Not added. Fix the file and try again.'}</small></div>
         <Badge status="rejected" />
         <div className="acts">
+          {onTryAgain && <button className="btn sm" onClick={onTryAgain}>Try again</button>}
           <button className="btn ghost sm" onClick={onRetry}>Choose another file</button>
           <button className="btn ghost sm" onClick={onDismiss}>Dismiss</button>
         </div>

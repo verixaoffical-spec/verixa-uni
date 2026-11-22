@@ -88,6 +88,18 @@ export function useLibrary() {
     else reportAdded('pm', [...picked, ...extras].map(f => f.name), replacing);
   }
 
+  // Tries a refused collection again, for example after the one that blocked it was deleted
+  function tryAgain(id: number) {
+    const item = latest.current.rejected.find(r => r.id === id);
+    if (!item?.file) return;
+    const current = latest.current.collection;
+    if (current && !current.removed) {
+      toast(`"${current.name}" is still here. Delete it or use Replace file, then try again`);
+      return;
+    }
+    if (change(l => L.addCollectionFile(l, [item.file!]))) reportAdded('pm', [item.name], false);
+  }
+
   function removeSpec(name: string) {
     const index = latest.current.specs.findIndex(s => s.name === name), spec = latest.current.specs[index];
     if (!spec) return;
@@ -204,6 +216,7 @@ export function useLibrary() {
     restoreSpec: (name: string) => change(l => L.restoreSpec(l, name)),
     restoreCollection: () => change(L.restoreCollection),
     dismiss: (id: number) => change(l => L.dismissRejected(l, id)),
+    tryAgain,
     editTest, editRequestCell, addTest, deleteTestRow, addRequestRow, deleteRequestRow,
     discard, reloadLatest, confirm,
   };
