@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import SearchPick from './SearchPick';
 import { ApiError, api, linkAgain, qa, type Account, type Session, type Targets } from './api';
 import { Chip, hookLabel, type HookState, type Link } from './connection';
 import { icons } from './icons';
@@ -174,16 +175,11 @@ export default function ConnectView({ hidden, account, github, atlassian, link, 
             </div>
           )}
           <div className="formgrid act">
-            <label className="field">Repository
-              <select value={repo} onChange={e => setRepo(e.target.value)}>
-                {targets.repos.map(r => <option key={r}>{r}</option>)}
-              </select>
-            </label>
-            <label className="field">Jira project
-              <select value={projectKey} onChange={e => setProjectKey(e.target.value)}>
-                {targets.projects.map(p => <option key={p.key} value={p.key}>{p.name} ({p.key})</option>)}
-              </select>
-            </label>
+            <SearchPick label="Repository" noun="repository" placeholder="Search your repositories"
+                        options={targets.repos.map(r => ({ value: r, label: r }))} value={repo} onChange={setRepo} />
+            <SearchPick label="Jira project" noun="project" placeholder="Search your Jira projects"
+                        options={targets.projects.map(p => ({ value: p.key, label: `${p.name} (${p.key})` }))}
+                        value={projectKey} onChange={setProjectKey} />
             <button className="btn" disabled={connecting} onClick={connect}>Connect and create webhook</button>
           </div>
           {link && <div className="note">{link.repo} is linked to {link.project}</div>}
