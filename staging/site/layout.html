@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{title}}</title>
+<meta name="description" content="TaskFlow is the task manager for small teams: one shared list, clear owners and dates, and a calm view of today.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230F3D30'/%3E%3Cpath d='M9 16.5l4.5 4.5L23 11' stroke='%23E4F25A' stroke-width='3.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+</head>
+<body class="{{body_class}}">
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-head">
+  <div class="shell head-row">
+    <a class="brand" href="/" aria-label="TaskFlow home">
+      <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#0F3D30"/><path d="M9 16.5l4.5 4.5L23 11" stroke="#E4F25A" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>TaskFlow</span>
+    </a>
+    <nav class="main-nav" aria-label="Main">
+      <a href="/#product">Product</a>
+      <a href="/pricing">Pricing</a>
+      {{docs_link}}
+      <a href="/contact">Contact</a>
+    </nav>
+    <div class="head-actions">
+      <a class="link-quiet" href="/signin">Sign in</a>
+      <a class="btn btn-pine" href="/signin">Start for free</a>
+    </div>
+  </div>
+</header>
+<main id="main">
+{{body}}
+</main>
+{{footer}}
+</body>
+</html>

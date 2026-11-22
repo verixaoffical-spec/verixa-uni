@@ -1,0 +1,34 @@
+<section class="page-head">
+  <div class="shell contact-grid">
+    <div class="contact-copy">
+      <h1>Contact us</h1>
+      <p class="page-lead">Questions about plans, a demo for your team, or help with your account. A person reads every message and answers within one working day.</p>
+      <dl class="reach">
+        <div><dt>Sales</dt><dd>sales@taskflow.example</dd></div>
+        <div><dt>Support</dt><dd>help@taskflow.example</dd></div>
+        <div><dt>Office</dt><dd>12 Mill Lane, Bristol, United Kingdom</dd></div>
+      </dl>
+    </div>
+    <form id="form" class="form-panel" novalidate>
+      <label for="name">Name</label>
+      <input id="name" autocomplete="name">
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="email">
+      <label for="message">Message</label>
+      <textarea id="message" rows="6"></textarea>
+      <button class="btn btn-pine btn-lg" type="submit">Send message</button>
+      <p id="msg" class="form-msg" role="status"></p>
+    </form>
+  </div>
+</section>
+<script>
+const $ = id => document.getElementById(id);
+$('form').onsubmit = async event => {
+  event.preventDefault();
+  const body = { name: $('name').value.trim(), email: $('email').value.trim(), message: $('message').value.trim() };
+  const say = (text, kind) => { $('msg').textContent = text; $('msg').className = 'form-msg ' + kind; };
+  if (!body.name || !body.email || !body.message) return say('Please fill in every field', 'is-error');
+  const res = await fetch('/api/contact', { method: 'POST', body: JSON.stringify(body) });
+  res.ok ? say('Thanks, we got your message', 'is-ok') : say('Your message could not be sent', 'is-error');
+};
+</script>

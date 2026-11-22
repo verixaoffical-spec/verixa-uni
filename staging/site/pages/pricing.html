@@ -1,0 +1,56 @@
+<section class="page-head">
+  <div class="shell">
+    <h1>Pricing</h1>
+    <p class="page-lead">Start free, then pay per team, not per seat. Pick how you want to pay.</p>
+    <div class="period" role="group" aria-label="Billing period">
+      <button id="monthly" aria-pressed="true">Monthly</button>
+      <button id="yearly" aria-pressed="false">Yearly (20% off)</button>
+    </div>
+  </div>
+</section>
+
+<section class="plans-wrap">
+  <div class="shell plans" id="plans" aria-live="polite"></div>
+</section>
+
+<section class="faq">
+  <div class="shell faq-grid">
+    <h2 class="section-title">Questions teams ask before they switch</h2>
+    <div class="faq-list">
+      <details><summary>Can I change plans later?</summary><p>Yes. Upgrade or downgrade at any time. We work out the difference to the day.</p></details>
+      <details><summary>What counts as a team?</summary><p>Everyone in one workspace. Pro covers up to 10 people and Team has no limit.</p></details>
+      <details><summary>Do you offer discounts for schools and charities?</summary><p>Yes, half price on every plan. Write to us from the contact page.</p></details>
+      <details><summary>Where is my data stored?</summary><p>In the European Union, encrypted at rest and in transit. You can export it whenever you like.</p></details>
+    </div>
+  </div>
+</section>
+
+<script>
+const features = {{features}};
+const blurb = { Free: 'For one person or a tiny team trying it out.', Pro: 'For a team that plans its week together.', Team: 'For a company with several teams.' };
+let plans = [], period = 'monthly';
+const show = () => {
+  const box = document.getElementById('plans');
+  box.textContent = '';
+  for (const p of plans) {
+    const card = document.createElement('article');
+    card.className = 'plan' + (p.name === 'Pro' ? ' plan-pick' : '');
+    if (p.name === 'Pro') { const tag = document.createElement('p'); tag.className = 'plan-tag'; tag.textContent = 'Most teams choose this'; card.append(tag); }
+    const name = document.createElement('h2'); name.textContent = p.name;
+    const about = document.createElement('p'); about.className = 'plan-about'; about.textContent = blurb[p.name];
+    const price = document.createElement('p'); price.className = 'price';
+    price.textContent = '$' + p[period] + (period === 'monthly' ? ' / month' : ' / year');
+    const list = document.createElement('ul');
+    for (const f of features[p.name]) { const li = document.createElement('li'); li.textContent = f; list.append(li); }
+    const go = document.createElement('a');
+    go.className = 'btn ' + (p.name === 'Pro' ? 'btn-pine' : 'btn-line');
+    go.href = '/signin';
+    go.textContent = p.monthly ? 'Choose ' + p.name : 'Start for free';
+    card.append(name, about, price, list, go);
+    box.append(card);
+  }
+  for (const id of ['monthly', 'yearly']) document.getElementById(id).setAttribute('aria-pressed', String(id === period));
+};
+for (const id of ['monthly', 'yearly']) document.getElementById(id).onclick = () => { period = id; show(); };
+fetch('/api/plans').then(r => r.json()).then(data => { plans = data; show(); });
+</script>
