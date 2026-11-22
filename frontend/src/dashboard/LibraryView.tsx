@@ -71,6 +71,7 @@ export default function LibraryView({ hidden, link, hook, library, onGoConnect }
   const rejected = (kind: Kind) => lib.rejected.filter(r => r.kind === kind);
   const rejectedCards = (kind: Kind) => rejected(kind).map(r => (
     <RejectedCard key={r.id} item={r} onDismiss={() => library.dismiss(r.id)}
+                  onTryAgain={r.file ? () => library.tryAgain(r.id) : undefined}
                   onRetry={() => (kind === 'pw' ? specInput : collectionInput).current?.click()} />
   ));
 
