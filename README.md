@@ -118,3 +118,67 @@ Python tests use their own test database and refuse to start any other way, so t
 - The risk rules were measured on 30 examples the team wrote (26 correct). Accuracy on real projects is not measured.
 - There is no one command way to start a run. Run Now is the only way.
 - Checking uploaded test code by its text cannot catch every trick, so each run is also isolated.
+
+---here----
+## Running locally on Windows (PowerShell)
+
+### 1. One-time setup
+
+```powershell
+cd D:\d\verixa-final
+
+# Create the virtual environment (do not copy .venv between folders)
+py -V:Astral/CPython3.12.16 -m venv .venv
+# If that fails, use: python -m venv .venv
+
+# Activate it
+.\.venv\Scripts\Activate.ps1
+# If PowerShell blocks activation:
+# Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 2. Start the backend (Terminal 1, port 8000)
+
+```powershell
+cd D:\d\verixa-final
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn backend.main:app --reload --port 8000
+```
+
+### 3. Start the staging demo site (Terminal 2, port 4000)
+
+```powershell
+cd D:\d\verixa-final\staging
+..\.venv\Scripts\Activate.ps1
+python server.py
+```
+
+Open http://127.0.0.1:4000 for the site and http://127.0.0.1:4000/demo for the bug switches.
+Test login: `demo@taskflow.test` / `Taskflow123!`
+
+To use another port: `python server.py 4100`
+
+### 4. Start the ngrok tunnel (Terminal 3, optional)
+
+```powershell
+ngrok http 8000 --url https://sedate-thicket-eclipse.ngrok-free.dev
+```
+
+First time only, add your authtoken:
+
+```powershell
+ngrok config add-authtoken YOUR_TOKEN
+```
+
+### Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `No Python at ...` or venv will not start | Delete `.venv` and recreate it (step 1) |
+| `ngrok` not recognized | Open a new terminal, or refresh PATH: `$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")` |
+| `ERR_CONNECTION_REFUSED` on port 4000 | The staging server is not running; start it (step 3) |
+| Port already in use | `netstat -ano \| findstr :4000`, or run on another port |
+| Restarting staging | All demo switches reset (bugs off, Docs page hidden) |
